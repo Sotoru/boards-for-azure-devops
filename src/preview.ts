@@ -67,7 +67,7 @@ export async function preview(w: WorkItem) {
     panel.onDidDispose(() => (panel = shown = undefined));
   }
   shown = fresh;
-  panel.title = `#${w.id} ${f['System.Title']}`;
+  panel.title = `#${w.id}`;
   const meta = ([
     [t('ID'), `#${w.id}`], [t('Type'), f['System.WorkItemType']], [t('State'), f['System.State']],
     [t('Assigned to'), f['System.AssignedTo']?.displayName], [t('Iteration'), f['System.IterationPath']],
