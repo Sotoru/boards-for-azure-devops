@@ -1,0 +1,181 @@
+{
+  "name": "boards-for-azure-devops",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "0.1.0",
+  "publisher": "sotoru",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Sotoru/boards-for-azure-devops"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "l10n": "./l10n",
+  "activationEvents": [],
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc",
+    "test": "node --test test/*.test.ts",
+    "package": "vsce package",
+    "vscode:prepublish": "npm run typecheck && node esbuild.mjs --production"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/vscode": "1.90",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "board_azr_devops",
+          "title": "%container.title%",
+          "icon": "$(checklist)"
+        }
+      ]
+    },
+    "views": {
+      "board_azr_devops": [
+        {
+          "id": "board_azr_devops.mine",
+          "name": "%view.mine%"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "board_azr_devops.mine",
+        "contents": "%view.mine.welcome%"
+      }
+    ],
+    "commands": [
+      {
+        "command": "board_azr_devops.refresh",
+        "title": "%cmd.refresh%",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "board_azr_devops.switchScope",
+        "title": "%cmd.switchScope%",
+        "category": "Azure Boards"
+      },
+      {
+        "command": "board_azr_devops.open",
+        "title": "%cmd.open%"
+      },
+      {
+        "command": "board_azr_devops.preview",
+        "title": "%cmd.preview%"
+      },
+      {
+        "command": "board_azr_devops.setState",
+        "title": "%cmd.setState%"
+      },
+      {
+        "command": "board_azr_devops.setTitle",
+        "title": "%cmd.setTitle%"
+      },
+      {
+        "command": "board_azr_devops.assignMe",
+        "title": "%cmd.assignMe%"
+      },
+      {
+        "command": "board_azr_devops.comment",
+        "title": "%cmd.comment%"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "board_azr_devops.open",
+          "when": "false"
+        },
+        {
+          "command": "board_azr_devops.preview",
+          "when": "false"
+        },
+        {
+          "command": "board_azr_devops.setState",
+          "when": "false"
+        },
+        {
+          "command": "board_azr_devops.setTitle",
+          "when": "false"
+        },
+        {
+          "command": "board_azr_devops.assignMe",
+          "when": "false"
+        },
+        {
+          "command": "board_azr_devops.comment",
+          "when": "false"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "board_azr_devops.setState",
+          "when": "viewItem == workItem",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "board_azr_devops.setTitle",
+          "when": "viewItem == workItem",
+          "group": "1_edit@2"
+        },
+        {
+          "command": "board_azr_devops.assignMe",
+          "when": "viewItem == workItem",
+          "group": "1_edit@3"
+        },
+        {
+          "command": "board_azr_devops.comment",
+          "when": "viewItem == workItem",
+          "group": "1_edit@4"
+        },
+        {
+          "command": "board_azr_devops.preview",
+          "when": "viewItem == workItem",
+          "group": "2_open@1"
+        },
+        {
+          "command": "board_azr_devops.open",
+          "when": "viewItem == workItem",
+          "group": "2_open@2"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "board_azr_devops.refresh",
+          "when": "view == board_azr_devops.mine",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Azure Boards",
+      "properties": {
+        "board_azr_devops.organizations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "%config.organizations%"
+        },
+        "board_azr_devops.query": {
+          "type": "string",
+          "default": "SELECT [System.Id] FROM WorkItems WHERE [System.AssignedTo] = @Me AND [System.State] NOT IN ('Closed','Done','Removed','Resolved') ORDER BY [System.ChangedDate] DESC",
+          "description": "%config.query%"
+        }
+      }
+    }
+  }
+}

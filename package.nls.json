@@ -1,0 +1,17 @@
+{
+  "displayName": "Boards for Azure DevOps",
+  "description": "Browse, filter and edit Azure DevOps work items from the VS Code sidebar.",
+  "container.title": "Azure Boards",
+  "view.mine": "Assigned to me",
+  "view.mine.welcome": "No organization selected.\n[Choose organization](command:board_azr_devops.switchScope)",
+  "cmd.refresh": "Refresh",
+  "cmd.switchScope": "Switch organization, project and team",
+  "cmd.open": "Open in browser",
+  "cmd.preview": "Show all",
+  "cmd.setState": "Change state",
+  "cmd.setTitle": "Edit title",
+  "cmd.assignMe": "Assign to me",
+  "cmd.comment": "Comment",
+  "config.organizations": "Extra Azure DevOps organizations (the part after `dev.azure.com/`). Organizations of the signed-in account are discovered automatically; add here the ones in other tenants.",
+  "config.query": "WIQL query for the \"Assigned to me\" view"
+}
