@@ -2,9 +2,10 @@ import * as vscode from 'vscode';
 import { allowLogin, WorkItem } from './api';
 import { groupItems, hierarchy } from './filters';
 import { Model } from './model';
-import { descLines, plain } from './text';
+import { plain } from './text';
 
-type Row = { row: vscode.TreeItem };
+/** `copy` is the value the "Copy" action puts on the clipboard. */
+export type Row = { row: vscode.TreeItem; copy?: string };
 type GroupNode = { group: string; label: string; items: WorkItem[] };
 type DetailsNode = { details: WorkItem };
 // WorkItem nodes are the work items themselves, so context-menu commands receive a WorkItem directly.
@@ -15,17 +16,26 @@ function row(icon: string, label: string, description?: string, extra: Partial<v
   return { row: Object.assign(new vscode.TreeItem(label), { iconPath: new vscode.ThemeIcon(icon), description }, extra) };
 }
 
+/** A label/value row whose value can be copied (inline icon and context menu). */
+function field(icon: string, label: string, value: string | undefined, shown = value, extra: Partial<vscode.TreeItem> = {}): Row {
+  const r = row(icon, label, shown ?? '—', { contextValue: value ? 'field' : undefined, ...extra });
+  return { ...r, copy: value };
+}
+
+const DESC_PREVIEW = 80;
+
 function detailRows(w: WorkItem): Row[] {
   const f = w.fields;
   const desc = plain(f['System.Description']);
   return [
-    row('symbol-number', t('ID'), `#${w.id}`),
-    row('circle-outline', t('State'), f['System.State']),
-    row('person', t('Assigned to'), f['System.AssignedTo']?.displayName ?? '—'),
-    row('calendar', t('Iteration'), f['System.IterationPath']),
-    ...(f['Microsoft.VSTS.Common.Priority'] !== undefined ? [row('arrow-up', t('Priority'), String(f['Microsoft.VSTS.Common.Priority']))] : []),
-    ...(f['System.Tags'] ? [row('tag', t('Tags'), f['System.Tags'])] : []),
-    ...descLines(desc).map((line, i) => row(i ? 'blank' : 'note', line, undefined, { tooltip: desc.slice(0, 1000) })),
+    field('symbol-number', t('ID'), String(w.id), `#${w.id}`),
+    field('symbol-text', t('Title'), f['System.Title']),
+    field('circle-outline', t('State'), f['System.State']),
+    field('person', t('Assigned to'), f['System.AssignedTo']?.displayName),
+    field('calendar', t('Iteration'), f['System.IterationPath']),
+    ...(f['Microsoft.VSTS.Common.Priority'] !== undefined ? [field('arrow-up', t('Priority'), String(f['Microsoft.VSTS.Common.Priority']))] : []),
+    ...(f['System.Tags'] ? [field('tag', t('Tags'), f['System.Tags'])] : []),
+    ...(desc ? [field('note', t('Description'), desc, desc.length > DESC_PREVIEW ? `${desc.slice(0, DESC_PREVIEW)}…` : desc, { tooltip: desc.slice(0, 1000) })] : []),
     row('link-external', t('Show all'), undefined, { command: { command: 'board_azr_devops.preview', title: t('Show all'), arguments: [w] } }),
   ];
 }

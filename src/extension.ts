@@ -10,7 +10,7 @@ import { activeFilterCount } from './filters';
 import { Model } from './model';
 import { preview, shownId } from './preview';
 import { ScopeStore } from './scope';
-import { WorkItemTree } from './tree';
+import { Row, WorkItemTree } from './tree';
 
 const t = vscode.l10n.t;
 const config = () => vscode.workspace.getConfiguration('board_azr_devops');
@@ -98,6 +98,11 @@ export function activate(ctx: vscode.ExtensionContext) {
     command('startWork', async (w: WorkItem) => { await git.startWork(w); await afterChange(w); }),
     command('openBoard', () => board.show()),
     command('copyForAi', copyForAi),
+    command('copyField', async (r: Row) => {
+      if (!r?.copy) return;
+      await vscode.env.clipboard.writeText(r.copy);
+      vscode.window.setStatusBarMessage(t('Copied: {0}', r.copy.length > 40 ? `${r.copy.slice(0, 40)}…` : r.copy), 3000);
+    }),
     registerMcp(scope),
     command('openActive', () => git.active && preview(git.active)),
     command('newItem', async () => {

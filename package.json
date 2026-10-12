@@ -191,6 +191,11 @@
         "command": "board_azr_devops.copyForAi",
         "title": "%cmd.copyForAi%",
         "icon": "$(copy)"
+      },
+      {
+        "command": "board_azr_devops.copyField",
+        "title": "%cmd.copyField%",
+        "icon": "$(copy)"
       }
     ],
     "menus": {
@@ -254,6 +259,10 @@
         {
           "command": "board_azr_devops.copyForAi",
           "when": "false"
+        },
+        {
+          "command": "board_azr_devops.copyField",
+          "when": "false"
         }
       ],
       "view/item/context": [
@@ -296,6 +305,16 @@
           "command": "board_azr_devops.copyForAi",
           "when": "viewItem == workItem",
           "group": "3_ai@1"
+        },
+        {
+          "command": "board_azr_devops.copyField",
+          "when": "viewItem == field",
+          "group": "inline"
+        },
+        {
+          "command": "board_azr_devops.copyField",
+          "when": "viewItem == field",
+          "group": "1_copy"
         }
       ],
       "view/title": [

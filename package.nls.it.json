@@ -36,5 +36,6 @@
   "config.commitReference": "Precompila il messaggio di commit vuoto con `#<id>` del work item del branch corrente (collega il commit in Azure Repos).",
   "cmd.openBoard": "Apri board",
   "cmd.copyForAi": "Copia per AI",
-  "config.registerMcp": "Offri il server MCP ufficiale di Azure DevOps (`@azure-devops/mcp`) per l'organizzazione attiva a Copilot e agli altri client MCP di VS Code. Disattivalo se l'hai già configurato tu."
+  "config.registerMcp": "Offri il server MCP ufficiale di Azure DevOps (`@azure-devops/mcp`) per l'organizzazione attiva a Copilot e agli altri client MCP di VS Code. Disattivalo se l'hai già configurato tu.",
+  "cmd.copyField": "Copia"
 }
