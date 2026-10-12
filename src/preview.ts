@@ -19,7 +19,7 @@ const ref = (w: WorkItem): WorkItem => ({ ...w, fields: {
 const cmdLink = (cmd: string, w: WorkItem, label: string) =>
   `<a href="command:${cmd}?${encodeURIComponent(JSON.stringify([ref(w)]))}">${esc(label)}</a>`;
 
-const CSS = `body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);padding:0 1rem}th{text-align:left;padding-right:1rem;opacity:.7;vertical-align:top}a{color:var(--vscode-textLink-foreground)}img{max-width:100%}.bar a{margin-right:1rem;white-space:nowrap;line-height:1.8}.c{border-top:1px solid var(--vscode-panel-border);padding:.5rem 0}`;
+const CSS = `body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);padding:0 1rem}th{text-align:left;padding-right:1rem;opacity:.7;vertical-align:top}a{color:var(--vscode-textLink-foreground)}img{max-width:100%}.bar a{margin-right:1rem;white-space:nowrap;line-height:1.8}.c{border-top:1px solid var(--vscode-panel-border);padding:.5rem 0}.none{opacity:.6}`;
 // Description/comment HTML comes from Azure DevOps as-is; scripts stay off (webview default) and the CSP blocks everything else.
 const page = (body: string) => `<!DOCTYPE html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src https: data:;">
@@ -69,7 +69,7 @@ export async function preview(w: WorkItem) {
   shown = fresh;
   panel.title = `#${w.id} ${f['System.Title']}`;
   const meta = ([
-    [t('Type'), f['System.WorkItemType']], [t('State'), f['System.State']],
+    [t('ID'), `#${w.id}`], [t('Type'), f['System.WorkItemType']], [t('State'), f['System.State']],
     [t('Assigned to'), f['System.AssignedTo']?.displayName], [t('Iteration'), f['System.IterationPath']],
     [t('Priority'), f['Microsoft.VSTS.Common.Priority']?.toString()], [t('Area'), f['System.AreaPath']], [t('Tags'), f['System.Tags']],
   ] as const).filter(([, v]) => v).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('');
@@ -77,13 +77,13 @@ export async function preview(w: WorkItem) {
   const commentsHtml = comments.map(c =>
     `<div class="c"><b>${esc(c.createdBy?.displayName)}</b> · ${esc(new Date(c.createdDate).toLocaleString())}<div>${c.renderedText ?? c.text}</div></div>`).join('');
   panel.webview.html = page(`
-<h1>#${w.id} ${esc(f['System.Title'])}</h1>
+<h1>${esc(f['System.Title'])}</h1>
 <p class="bar">${ACTIONS.map(([c, label]) => cmdLink(`board_azr_devops.${c}`, fresh, t(label))).join('')}<a href="${esc(webUrl(w))}">${esc(t('Open in Azure DevOps'))}</a></p>
 <table>${meta}</table>
 ${section(t('Description'), description)}
 ${section(t('Acceptance criteria'), criteria)}
 ${section(t('Repro steps'), repro)}
-${dev}
-<h2>${esc(t('Comments ({0})', comments.length))}</h2>${commentsHtml}`);
+<h2>${esc(t('Comments ({0})', comments.length))}</h2>${commentsHtml || `<p class="none">${esc(t('No comments'))}</p>`}
+${dev}`);
   panel.reveal();
 }
