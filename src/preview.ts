@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { getComments, getWorkItemFull, isMarkdown, webUrl, WorkItem } from './api';
+import { Commit, getComments, getCommit, getPullRequest, getWorkItemFull, isMarkdown, PullRequest, prUrl, webUrl, WorkItem } from './api';
+import { parseArtifactLinks } from './gitText';
 import { renderMarkdown } from './editorFs';
 import { esc } from './text';
 
@@ -7,6 +8,7 @@ const t = vscode.l10n.t;
 const ACTIONS: [string, string][] = [
   ['setState', 'Change state'], ['setTitle', 'Edit title'], ['setPriority', 'Priority'], ['setTags', 'Tags'],
   ['assign', 'Assign…'], ['setIteration', 'Sprint'], ['editDescription', 'Edit description'], ['comment', 'Comment'], ['addChild', 'Add child'],
+  ['startWork', 'Start working'],
 ];
 export const EDIT_COMMANDS = ACTIONS.map(([c]) => `board_azr_devops.${c}`);
 
@@ -23,6 +25,27 @@ const page = (body: string) => `<!DOCTYPE html><html><head><meta charset="utf-8"
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src https: data:;">
 <style>${CSS}</style></head><body>${body}</body></html>`;
 
+const MAX_LINKS = 10;
+const settle = <T>(ps: Promise<T>[]) => Promise.allSettled(ps).then(rs => rs.flatMap(r => (r.status === 'fulfilled' ? [r.value] : [])));
+
+/** Linked pull requests and commits; ones that fail to load (deleted repo, no access) are skipped. */
+async function linkedDev(org: string, relations: { rel: string; url: string }[] | undefined) {
+  const links = parseArtifactLinks(relations);
+  const [prs, commits] = await Promise.all([
+    settle<PullRequest>(links.filter(l => l.kind === 'pr').slice(0, MAX_LINKS).map(l => getPullRequest(org, l.repoId, l.key))),
+    settle<Commit>(links.filter(l => l.kind === 'commit').slice(0, MAX_LINKS).map(l => getCommit(org, l.projectId, l.repoId, l.key))),
+  ]);
+  const prHtml = prs.map(pr => `<li><a href="${esc(prUrl(org, pr))}">!${pr.pullRequestId} ${esc(pr.title)}</a> · ${esc(pr.isDraft ? t('draft') : pr.status)} · ${esc(pr.repository.name)}</li>`).join('');
+  const commitHtml = commits.map(c => {
+    const label = `${c.commitId.slice(0, 8)} ${esc(c.comment.split('\n')[0])}`;
+    return `<li>${c.remoteUrl ? `<a href="${esc(c.remoteUrl)}">${label}</a>` : label} · ${esc(c.author?.name)}</li>`;
+  }).join('');
+  return [
+    prHtml && `<h2>${esc(t('Pull requests'))}</h2><ul>${prHtml}</ul>`,
+    commitHtml && `<h2>${esc(t('Commits'))}</h2><ul>${commitHtml}</ul>`,
+  ].join('');
+}
+
 let panel: vscode.WebviewPanel | undefined;
 let shown: WorkItem | undefined;
 export const shownId = () => shown?.id;
@@ -37,6 +60,7 @@ export async function preview(w: WorkItem) {
     html('System.Description'), html('Microsoft.VSTS.Common.AcceptanceCriteria'), html('Microsoft.VSTS.TCM.ReproSteps'),
   ]);
   const fresh: WorkItem = { ...w, fields: f };
+  const dev = await linkedDev(w.org, full.relations);
   if (!panel) {
     // Command URIs limited to our edit commands, so links inside Azure DevOps HTML can't trigger anything else.
     panel = vscode.window.createWebviewPanel('board_azr_devops.preview', '', vscode.ViewColumn.Active, { enableCommandUris: EDIT_COMMANDS });
@@ -59,6 +83,7 @@ export async function preview(w: WorkItem) {
 ${section(t('Description'), description)}
 ${section(t('Acceptance criteria'), criteria)}
 ${section(t('Repro steps'), repro)}
+${dev}
 <h2>${esc(t('Comments ({0})', comments.length))}</h2>${commentsHtml}`);
   panel.reveal();
 }

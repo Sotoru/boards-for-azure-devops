@@ -12,6 +12,9 @@ Browse and edit Azure DevOps work items from the VS Code sidebar. Not affiliated
 - Create work items (team area, current sprint) and child items.
 - Edit state, title, priority, tags, assignee (any team member) and sprint from the context menu or the full view.
 - Edit the description and write comments in a Markdown editor tab: saving sends them to Azure DevOps. Saves are rejected if someone else changed the item meanwhile, and the text stays in the editor.
+- "Start working": creates (or checks out) a branch from a template (default `{type}/{id}`) off the remote default branch, moves the item to its in-progress state and assigns it to you.
+- The work item of the current branch is highlighted and shown in the status bar; an empty commit message gets `#<id>` so Azure Repos links the commit.
+- Linked pull requests and commits in the full view.
 - Auto-refresh while the window is focused, badge with your open items, notification on new assignments.
 
 English and Italian. See [PLAN.md](PLAN.md) for the roadmap.

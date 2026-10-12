@@ -170,6 +170,16 @@
       {
         "command": "board_azr_devops.addChild",
         "title": "%cmd.addChild%"
+      },
+      {
+        "command": "board_azr_devops.startWork",
+        "title": "%cmd.startWork%",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "board_azr_devops.openActive",
+        "title": "%cmd.openActive%",
+        "category": "Azure Boards"
       }
     ],
     "menus": {
@@ -225,9 +235,18 @@
         {
           "command": "board_azr_devops.addChild",
           "when": "false"
+        },
+        {
+          "command": "board_azr_devops.startWork",
+          "when": "false"
         }
       ],
       "view/item/context": [
+        {
+          "command": "board_azr_devops.startWork",
+          "when": "viewItem == workItem",
+          "group": "0_work@1"
+        },
         {
           "submenu": "board_azr_devops.editField",
           "when": "viewItem == workItem",
@@ -363,6 +382,21 @@
           "type": "boolean",
           "default": true,
           "description": "%config.notifyAssigned%"
+        },
+        "board_azr_devops.branchTemplate": {
+          "type": "string",
+          "default": "{type}/{id}",
+          "markdownDescription": "%config.branchTemplate%"
+        },
+        "board_azr_devops.baseBranch": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%config.baseBranch%"
+        },
+        "board_azr_devops.commitReference": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.commitReference%"
         }
       }
     },

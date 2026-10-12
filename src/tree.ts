@@ -36,9 +36,11 @@ export class WorkItemTree implements vscode.TreeDataProvider<Node> {
   readonly onDidChangeTreeData = this.changed.event;
   private children = new Map<number, WorkItem[]>();
 
-  constructor(private readonly model: Model) {
+  constructor(private readonly model: Model, private readonly activeId: () => number | undefined) {
     model.onDidChange(() => this.changed.fire());
   }
+
+  refresh() { this.changed.fire(); }
 
   getTreeItem(n: Node): vscode.TreeItem {
     if ('row' in n) return n.row;
@@ -52,7 +54,11 @@ export class WorkItemTree implements vscode.TreeDataProvider<Node> {
     const item = new vscode.TreeItem(`#${n.id} ${f['System.Title']}`, vscode.TreeItemCollapsibleState.Collapsed);
     item.description = `${f['System.WorkItemType']} · ${f['System.State']}`;
     item.tooltip = `${f['System.TeamProject']} · ${f['System.AssignedTo']?.displayName ?? t('Unassigned')}`;
-    item.iconPath = new vscode.ThemeIcon(TYPE_ICONS[f['System.WorkItemType']] ?? 'circle-small');
+    const active = this.activeId() === n.id;
+    item.iconPath = active
+      ? new vscode.ThemeIcon('target', new vscode.ThemeColor('charts.green'))
+      : new vscode.ThemeIcon(TYPE_ICONS[f['System.WorkItemType']] ?? 'circle-small');
+    if (active) item.description = `${t('current branch')} · ${item.description}`;
     item.contextValue = 'workItem';
     return item;
   }

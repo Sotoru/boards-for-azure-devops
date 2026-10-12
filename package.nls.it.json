@@ -28,5 +28,10 @@
   "cmd.setIteration": "Sposta nello sprint…",
   "cmd.editDescription": "Modifica descrizione",
   "cmd.addChild": "Aggiungi figlio…",
-  "submenu.editField": "Modifica campo"
+  "submenu.editField": "Modifica campo",
+  "cmd.startWork": "Inizia a lavorare",
+  "cmd.openActive": "Mostra il work item del branch corrente",
+  "config.branchTemplate": "Nome del branch per \"Inizia a lavorare\". Segnaposto: `{type}` (`bugfix` per i bug, `feature` altrimenti), `{id}`, `{title}` (slug).",
+  "config.baseBranch": "Branch da cui partire, es. `origin/develop`. Vuoto: il branch di default del remote (`origin/HEAD`, poi `origin/main`, `origin/master`).",
+  "config.commitReference": "Precompila il messaggio di commit vuoto con `#<id>` del work item del branch corrente (collega il commit in Azure Repos)."
 }

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { allowLogin, webUrl, WorkItem } from './api';
 import { SCHEME, WorkItemEditorFs } from './editorFs';
 import { createInScope, edits } from './edits';
+import { GitIntegration } from './git';
 import { clearFilters, pickFilters, pickGroupBy } from './filterPick';
 import { activeFilterCount } from './filters';
 import { Model } from './model';
@@ -16,7 +17,9 @@ export function activate(ctx: vscode.ExtensionContext) {
   const scope = new ScopeStore(ctx.globalState);
   const model = new Model(ctx.globalState, scope);
   const editorFs = new WorkItemEditorFs();
-  const view = vscode.window.createTreeView('board_azr_devops.items', { treeDataProvider: new WorkItemTree(model), showCollapseAll: true });
+  const git = new GitIntegration(scope);
+  const tree = new WorkItemTree(model, () => git.active?.id);
+  const view = vscode.window.createTreeView('board_azr_devops.items', { treeDataProvider: tree, showCollapseAll: true });
   const safe = <A extends unknown[]>(fn: (...a: A) => unknown) => (...args: A) => {
     allowLogin();
     return Promise.resolve().then(() => fn(...args)).catch(e => vscode.window.showErrorMessage(`Azure Boards: ${(e as Error).message}`));
@@ -71,7 +74,9 @@ export function activate(ctx: vscode.ExtensionContext) {
   const timer = setInterval(() => { if (vscode.window.state.focused && stale(minutes() * 60_000)) void model.refresh(); }, 30_000);
 
   ctx.subscriptions.push(
-    scope, view,
+    scope, view, git,
+    git.onDidChangeActive(() => tree.refresh()),
+    scope.onDidChange(() => git.update()),
     { dispose: () => clearInterval(timer) },
     model.onDidChange(present),
     model.onNewAssignments(notify),
@@ -87,6 +92,8 @@ export function activate(ctx: vscode.ExtensionContext) {
     command('groupBy', () => pickGroupBy(model)),
     command('open', (w: WorkItem) => vscode.env.openExternal(vscode.Uri.parse(webUrl(w)))),
     command('preview', preview),
+    command('startWork', async (w: WorkItem) => { await git.startWork(w); await afterChange(w); }),
+    command('openActive', () => git.active && preview(git.active)),
     command('newItem', async () => {
       const created = await createInScope(scope);
       if (!created) return;

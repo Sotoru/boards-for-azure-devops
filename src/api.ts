@@ -157,8 +157,11 @@ export async function createWorkItem(org: string, project: string, type: string,
 export const fetchByTeamQuery = (org: string, project: string, team: string, query: string) =>
   wiql(org, teamPath(project, team), query);
 
-export interface FullWorkItem { rev: number; fields: Fields; multilineFieldsFormat?: Record<string, string> }
-export const getWorkItemFull = (w: WorkItem) => ado<FullWorkItem>(w.org, `_apis/wit/workitems/${w.id}?api-version=7.1`);
+export interface FullWorkItem {
+  rev: number; fields: Fields; multilineFieldsFormat?: Record<string, string>; relations?: { rel: string; url: string }[];
+}
+export const getWorkItemFull = (w: Pick<WorkItem, 'org' | 'id'>) =>
+  ado<FullWorkItem>(w.org, `_apis/wit/workitems/${w.id}?$expand=relations&api-version=7.1`);
 export const getWorkItem = (w: WorkItem) => getWorkItemFull(w).then(r => r.fields);
 export const isMarkdown = (full: FullWorkItem, field: keyof Fields) => full.multilineFieldsFormat?.[field]?.toLowerCase() === 'markdown';
 
@@ -172,9 +175,24 @@ export const addComment = (w: WorkItem, html: string) =>
     body: JSON.stringify({ text: html }),
   });
 
-export const listStates = (w: WorkItem) =>
-  ado<{ value: { name: string }[] }>(w.org, `${proj(w)}/_apis/wit/workitemtypes/${encodeURIComponent(w.fields['System.WorkItemType'])}/states?api-version=7.1`)
-    .then(r => r.value.map(s => s.name));
+/** category is one of Proposed, InProgress, Resolved, Completed, Removed. */
+export const listStatesFull = (w: WorkItem) =>
+  ado<{ value: { name: string; category: string }[] }>(w.org, `${proj(w)}/_apis/wit/workitemtypes/${encodeURIComponent(w.fields['System.WorkItemType'])}/states?api-version=7.1`)
+    .then(r => r.value);
+export const listStates = (w: WorkItem) => listStatesFull(w).then(ss => ss.map(s => s.name));
+
+export interface PullRequest {
+  pullRequestId: number; title: string; status: string; isDraft?: boolean; createdBy?: { displayName: string };
+  repository: { name: string; project: { name: string } };
+}
+export const getPullRequest = (org: string, repoId: string, id: string) =>
+  ado<PullRequest>(org, `_apis/git/repositories/${repoId}/pullrequests/${id}?api-version=7.1`);
+export const prUrl = (org: string, pr: PullRequest) =>
+  `https://dev.azure.com/${encodeURIComponent(org)}/${encodeURIComponent(pr.repository.project.name)}/_git/${encodeURIComponent(pr.repository.name)}/pullrequest/${pr.pullRequestId}`;
+
+export interface Commit { commitId: string; comment: string; author?: { name: string; date: string }; remoteUrl?: string }
+export const getCommit = (org: string, projectId: string, repoId: string, sha: string) =>
+  ado<Commit>(org, `${projectId}/_apis/git/repositories/${repoId}/commits/${sha}?api-version=7.1`);
 
 /**
  * `rev` makes Azure DevOps reject the update if someone else changed the item since it was read,
