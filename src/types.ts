@@ -14,4 +14,4 @@ export interface Fields {
   'Microsoft.VSTS.TCM.ReproSteps'?: string;
 }
 export interface WorkItem { org: string; id: number; fields: Fields }
-export interface Comment { text: string; createdDate: string; createdBy?: { displayName: string } }
+export interface Comment { text: string; renderedText?: string; createdDate: string; createdBy?: { displayName: string } }

@@ -4,10 +4,10 @@
   "cmd.switchScope": "Cambia organizzazione, progetto e team",
   "cmd.open": "Apri nel browser",
   "cmd.preview": "Mostra tutto",
-  "cmd.setState": "Cambia stato",
-  "cmd.setTitle": "Modifica titolo",
+  "cmd.setState": "Stato…",
+  "cmd.setTitle": "Titolo…",
   "cmd.assignMe": "Assegna a me",
-  "cmd.comment": "Commenta",
+  "cmd.comment": "Commenta…",
   "config.organizations": "Organizzazioni Azure DevOps aggiuntive (la parte dopo `dev.azure.com/`). Quelle dell'account con cui hai fatto login vengono trovate in automatico; aggiungi qui quelle di altri tenant.",
   "config.query": "Query WIQL per la vista \"Assegnati a me\"",
   "view.items": "Work item",
@@ -20,5 +20,13 @@
   "cmd.clearFilters": "Azzera filtri",
   "cmd.groupBy": "Raggruppa per…",
   "config.refreshMinutes": "Minuti tra un aggiornamento automatico e l'altro (solo con la finestra in primo piano).",
-  "config.notifyAssigned": "Mostra una notifica quando ti viene assegnato un work item."
+  "config.notifyAssigned": "Mostra una notifica quando ti viene assegnato un work item.",
+  "cmd.newItem": "Nuovo work item…",
+  "cmd.setPriority": "Priorità…",
+  "cmd.setTags": "Tag…",
+  "cmd.assign": "Assegna a…",
+  "cmd.setIteration": "Sposta nello sprint…",
+  "cmd.editDescription": "Modifica descrizione",
+  "cmd.addChild": "Aggiungi figlio…",
+  "submenu.editField": "Modifica campo"
 }

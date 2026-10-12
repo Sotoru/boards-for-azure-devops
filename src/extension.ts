@@ -1,44 +1,32 @@
 import * as vscode from 'vscode';
-import { addComment, allowLogin, listStates, myIdentity, update, webUrl, WorkItem } from './api';
+import { allowLogin, webUrl, WorkItem } from './api';
+import { SCHEME, WorkItemEditorFs } from './editorFs';
+import { createInScope, edits } from './edits';
 import { clearFilters, pickFilters, pickGroupBy } from './filterPick';
 import { activeFilterCount } from './filters';
 import { Model } from './model';
 import { preview, shownId } from './preview';
 import { ScopeStore } from './scope';
-import { esc } from './text';
 import { WorkItemTree } from './tree';
 
 const t = vscode.l10n.t;
 const config = () => vscode.workspace.getConfiguration('board_azr_devops');
 
-// Each edit returns undefined when the user cancels, so nothing gets refreshed.
-const edits: Record<string, (w: WorkItem) => Promise<unknown>> = {
-  async setState(w) {
-    const state = await vscode.window.showQuickPick(listStates(w), { placeHolder: t('Current state: {0}', w.fields['System.State']) });
-    return state && update(w, { 'System.State': state });
-  },
-  async setTitle(w) {
-    const title = await vscode.window.showInputBox({ value: w.fields['System.Title'], prompt: t('Title') });
-    return title && update(w, { 'System.Title': title });
-  },
-  async assignMe(w) {
-    return update(w, { 'System.AssignedTo': await myIdentity(w.org) });
-  },
-  async comment(w) {
-    const text = await vscode.window.showInputBox({ prompt: t('Comment on #{0}', w.id) });
-    return text && addComment(w, esc(text));
-  },
-};
-
 export function activate(ctx: vscode.ExtensionContext) {
   const scope = new ScopeStore(ctx.globalState);
   const model = new Model(ctx.globalState, scope);
+  const editorFs = new WorkItemEditorFs();
   const view = vscode.window.createTreeView('board_azr_devops.items', { treeDataProvider: new WorkItemTree(model), showCollapseAll: true });
   const safe = <A extends unknown[]>(fn: (...a: A) => unknown) => (...args: A) => {
     allowLogin();
     return Promise.resolve().then(() => fn(...args)).catch(e => vscode.window.showErrorMessage(`Azure Boards: ${(e as Error).message}`));
   };
   const command = (id: string, fn: (...a: any[]) => unknown) => vscode.commands.registerCommand(`board_azr_devops.${id}`, safe(fn));
+
+  const afterChange = async (w: WorkItem) => {
+    await model.refresh();
+    if (shownId() === w.id) await preview(w);
+  };
 
   const present = () => {
     const { org, team } = scope.current;
@@ -99,11 +87,18 @@ export function activate(ctx: vscode.ExtensionContext) {
     command('groupBy', () => pickGroupBy(model)),
     command('open', (w: WorkItem) => vscode.env.openExternal(vscode.Uri.parse(webUrl(w)))),
     command('preview', preview),
-    ...Object.entries(edits).map(([name, fn]) => command(name, async (w: WorkItem) => {
-      if (!(await fn(w))) return;
+    command('newItem', async () => {
+      const created = await createInScope(scope);
+      if (!created) return;
       await model.refresh();
-      if (shownId() === w.id) await preview(w);
+      await preview(created);
+    }),
+    ...Object.entries(edits(scope, editorFs)).map(([name, fn]) => command(name, async (w: WorkItem) => {
+      if (!(await fn(w))) return;
+      await afterChange(w);
     })),
+    vscode.workspace.registerFileSystemProvider(SCHEME, editorFs, { isCaseSensitive: true }),
+    editorFs.onDidSave(w => afterChange(w)),
   );
   present();
   void model.refresh(); // silent if not signed in yet: feeds the badge and notifications without opening the view

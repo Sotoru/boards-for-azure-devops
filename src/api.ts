@@ -78,7 +78,7 @@ export const listTeams = (org: string, project: string) =>
 
 const LIST_FIELDS = [
   'System.Title', 'System.State', 'System.WorkItemType', 'System.TeamProject', 'System.AssignedTo', 'System.IterationPath',
-  'System.Tags', 'System.Parent', 'System.Description', 'Microsoft.VSTS.Common.Priority',
+  'System.AreaPath', 'System.Tags', 'System.Parent', 'System.Description', 'Microsoft.VSTS.Common.Priority',
 ].join(',');
 
 // The batch endpoint takes at most 200 ids per call.
@@ -102,18 +102,67 @@ export const fetchMine = (org: string) =>
 
 const teamPath = (project: string, team: string) => `${encodeURIComponent(project)}/${encodeURIComponent(team)}/`;
 
-export async function getTeamField(org: string, project: string, team: string): Promise<TeamField> {
-  const r = await ado<{ field: { referenceName: string }; values: { value: string; includeChildren: boolean }[] }>(
+export async function getTeamField(org: string, project: string, team: string): Promise<TeamField & { defaultValue?: string }> {
+  const r = await ado<{ field: { referenceName: string }; defaultValue?: string; values: { value: string; includeChildren: boolean }[] }>(
     org, `${teamPath(project, team)}_apis/work/teamsettings/teamfieldvalues?api-version=7.1`);
-  return { field: r.field.referenceName, values: r.values };
+  return { field: r.field.referenceName, values: r.values, defaultValue: r.defaultValue };
+}
+
+export interface Iteration { name: string; path: string; attributes?: { timeFrame?: 'past' | 'current' | 'future' } }
+export const listIterations = (org: string, project: string, team: string) =>
+  ado<{ value: Iteration[] }>(org, `${teamPath(project, team)}_apis/work/teamsettings/iterations?api-version=7.1`).then(r => r.value);
+
+export const getBacklogIteration = (org: string, project: string, team: string) =>
+  ado<{ backlogIteration?: { name: string; path?: string } }>(org, `${teamPath(project, team)}_apis/work/teamsettings?api-version=7.1`)
+    .then(r => r.backlogIteration?.path || r.backlogIteration?.name);
+
+export const listMembers = (org: string, project: string, team: string) =>
+  ado<{ value: { identity: { displayName: string; uniqueName: string } }[] }>(
+    org, `_apis/projects/${encodeURIComponent(project)}/teams/${encodeURIComponent(team)}/members?api-version=7.1&$top=500`)
+    .then(r => r.value.map(m => m.identity));
+
+export const defaultTeam = (org: string, project: string) =>
+  ado<{ defaultTeam?: { name: string } }>(org, `_apis/projects/${encodeURIComponent(project)}?api-version=7.1`).then(r => r.defaultTeam?.name);
+
+/** Work item types offered for creation: hidden ones (test cases, code reviews, ...) are left out. */
+export async function listTypes(org: string, project: string) {
+  const p = encodeURIComponent(project);
+  const [types, cats] = await Promise.all([
+    ado<{ value: { name: string; isDisabled?: boolean }[] }>(org, `${p}/_apis/wit/workitemtypes?api-version=7.1`),
+    ado<{ value: { referenceName: string; workItemTypes: { name: string }[] }[] }>(org, `${p}/_apis/wit/workitemtypecategories?api-version=7.1`),
+  ]);
+  const hidden = new Set(cats.value.find(c => c.referenceName === 'Microsoft.HiddenCategory')?.workItemTypes.map(t => t.name));
+  return types.value.filter(t => !t.isDisabled && !hidden.has(t.name)).map(t => t.name).sort();
+}
+
+type Patch = { op: string; path: string; value?: unknown };
+const fieldOps = (fields: Partial<Record<keyof Fields, unknown>>): Patch[] =>
+  Object.entries(fields).map(([k, value]) => ({ op: 'add', path: `/fields/${k}`, value }));
+const patchInit = (ops: Patch[]): RequestInit =>
+  ({ method: 'PATCH', headers: { 'Content-Type': 'application/json-patch+json' }, body: JSON.stringify(ops) });
+
+export async function createWorkItem(org: string, project: string, type: string, fields: Partial<Record<keyof Fields, unknown>>, parentId?: number) {
+  const ops = fieldOps(fields);
+  if (parentId) {
+    ops.push({ op: 'add', path: '/relations/-', value: {
+      rel: 'System.LinkTypes.Hierarchy-Reverse',
+      url: `https://dev.azure.com/${encodeURIComponent(org)}/_apis/wit/workItems/${parentId}`,
+    } });
+  }
+  const r = await ado<{ id: number; fields: Fields }>(org, `${encodeURIComponent(project)}/_apis/wit/workitems/$${encodeURIComponent(type)}?api-version=7.1`,
+    { ...patchInit(ops), method: 'POST' });
+  return { org, id: r.id, fields: r.fields } satisfies WorkItem;
 }
 
 export const fetchByTeamQuery = (org: string, project: string, team: string, query: string) =>
   wiql(org, teamPath(project, team), query);
 
-export const getWorkItem = (w: WorkItem) =>
-  ado<{ fields: Fields }>(w.org, `_apis/wit/workitems/${w.id}?api-version=7.1`).then(r => r.fields);
+export interface FullWorkItem { rev: number; fields: Fields; multilineFieldsFormat?: Record<string, string> }
+export const getWorkItemFull = (w: WorkItem) => ado<FullWorkItem>(w.org, `_apis/wit/workitems/${w.id}?api-version=7.1`);
+export const getWorkItem = (w: WorkItem) => getWorkItemFull(w).then(r => r.fields);
+export const isMarkdown = (full: FullWorkItem, field: keyof Fields) => full.multilineFieldsFormat?.[field]?.toLowerCase() === 'markdown';
 
+// renderedText is the HTML of Markdown comments; plain HTML comments only have text.
 export const getComments = (w: WorkItem) =>
   ado<{ comments: Comment[] }>(w.org, `${proj(w)}/_apis/wit/workItems/${w.id}/comments?api-version=7.1-preview.4`).then(r => r.comments);
 
@@ -127,12 +176,18 @@ export const listStates = (w: WorkItem) =>
   ado<{ value: { name: string }[] }>(w.org, `${proj(w)}/_apis/wit/workitemtypes/${encodeURIComponent(w.fields['System.WorkItemType'])}/states?api-version=7.1`)
     .then(r => r.value.map(s => s.name));
 
-export const update = (w: WorkItem, fields: Partial<Record<keyof Fields, unknown>>) =>
-  ado(w.org, `_apis/wit/workitems/${w.id}?api-version=7.1`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json-patch+json' },
-    body: JSON.stringify(Object.entries(fields).map(([k, value]) => ({ op: 'add', path: `/fields/${k}`, value }))),
-  });
+/**
+ * `rev` makes Azure DevOps reject the update if someone else changed the item since it was read,
+ * so a long edit in the editor can't silently overwrite their changes.
+ */
+export function update(w: WorkItem, fields: Partial<Record<keyof Fields, unknown>>, opts: { rev?: number; markdown?: (keyof Fields)[] } = {}) {
+  const ops: Patch[] = [
+    ...(opts.rev !== undefined ? [{ op: 'test', path: '/rev', value: opts.rev }] : []),
+    ...fieldOps(fields),
+    ...(opts.markdown ?? []).map(f => ({ op: 'add', path: `/multilineFieldsFormat/${f}`, value: 'Markdown' })),
+  ];
+  return ado(w.org, `_apis/wit/workitems/${w.id}?api-version=7.1`, patchInit(ops));
+}
 
 export async function myIdentity(org: string) {
   return (await session(await tenantOf(org))).account.label;

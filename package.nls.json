@@ -6,10 +6,10 @@
   "cmd.switchScope": "Switch organization, project and team",
   "cmd.open": "Open in browser",
   "cmd.preview": "Show all",
-  "cmd.setState": "Change state",
-  "cmd.setTitle": "Edit title",
+  "cmd.setState": "State…",
+  "cmd.setTitle": "Title…",
   "cmd.assignMe": "Assign to me",
-  "cmd.comment": "Comment",
+  "cmd.comment": "Comment…",
   "config.organizations": "Extra Azure DevOps organizations (the part after `dev.azure.com/`). Organizations of the signed-in account are discovered automatically; add here the ones in other tenants.",
   "config.query": "WIQL query for the \"Assigned to me\" view",
   "view.items": "Work items",
@@ -22,5 +22,13 @@
   "cmd.clearFilters": "Clear filters",
   "cmd.groupBy": "Group by…",
   "config.refreshMinutes": "Minutes between automatic refreshes (only while the window is focused).",
-  "config.notifyAssigned": "Show a notification when a work item is assigned to you."
+  "config.notifyAssigned": "Show a notification when a work item is assigned to you.",
+  "cmd.newItem": "New work item…",
+  "cmd.setPriority": "Priority…",
+  "cmd.setTags": "Tags…",
+  "cmd.assign": "Assign to…",
+  "cmd.setIteration": "Move to sprint…",
+  "cmd.editDescription": "Edit description",
+  "cmd.addChild": "Add child…",
+  "submenu.editField": "Edit field"
 }

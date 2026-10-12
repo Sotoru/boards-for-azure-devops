@@ -16,7 +16,7 @@
 **Editing**
 - Create work items and child tasks.
 - State, title, priority, tags, assignee (anyone on the team), sprint via QuickPick/InputBox.
-- Description and multi-line comments in a Markdown editor tab, sent on save (check whether the org stores Markdown or HTML first).
+- Description and multi-line comments in a Markdown editor tab (`azboards:` file system), sent on save. Markdown fields are edited as-is; HTML fields are converted to Markdown and back (rendered with VS Code's Markdown engine). HTML with tables/images is routed to the browser. Saves carry a `/rev` test so concurrent changes are never overwritten.
 - Out of scope: attachments, non parent/child links, custom fields.
 
 **Kanban (webview panel)**
@@ -41,7 +41,7 @@
 
 1. ✅ **Foundation**: TypeScript + esbuild, l10n, multiple orgs with tenant detection, project/team in the status bar.
 2. ✅ **Sidebar**: Mine/All, filters, group by, details node, polling, badge, notifications.
-3. **Editing**: create, all fields, Markdown editor for description/comments.
+3. ✅ **Editing**: create, all fields, Markdown editor for description/comments.
 4. **Git**: start working, active item, commit reference, linked PRs/commits.
 5. **Kanban**.
 6. **AI**: MCP registration for Copilot, copy for AI.

@@ -140,6 +140,36 @@
       {
         "command": "board_azr_devops.comment",
         "title": "%cmd.comment%"
+      },
+      {
+        "command": "board_azr_devops.newItem",
+        "title": "%cmd.newItem%",
+        "icon": "$(add)",
+        "category": "Azure Boards"
+      },
+      {
+        "command": "board_azr_devops.setPriority",
+        "title": "%cmd.setPriority%"
+      },
+      {
+        "command": "board_azr_devops.setTags",
+        "title": "%cmd.setTags%"
+      },
+      {
+        "command": "board_azr_devops.assign",
+        "title": "%cmd.assign%"
+      },
+      {
+        "command": "board_azr_devops.setIteration",
+        "title": "%cmd.setIteration%"
+      },
+      {
+        "command": "board_azr_devops.editDescription",
+        "title": "%cmd.editDescription%"
+      },
+      {
+        "command": "board_azr_devops.addChild",
+        "title": "%cmd.addChild%"
       }
     ],
     "menus": {
@@ -171,26 +201,50 @@
         {
           "command": "board_azr_devops.filterActive",
           "when": "false"
+        },
+        {
+          "command": "board_azr_devops.setPriority",
+          "when": "false"
+        },
+        {
+          "command": "board_azr_devops.setTags",
+          "when": "false"
+        },
+        {
+          "command": "board_azr_devops.assign",
+          "when": "false"
+        },
+        {
+          "command": "board_azr_devops.setIteration",
+          "when": "false"
+        },
+        {
+          "command": "board_azr_devops.editDescription",
+          "when": "false"
+        },
+        {
+          "command": "board_azr_devops.addChild",
+          "when": "false"
         }
       ],
       "view/item/context": [
         {
-          "command": "board_azr_devops.setState",
+          "submenu": "board_azr_devops.editField",
           "when": "viewItem == workItem",
           "group": "1_edit@1"
         },
         {
-          "command": "board_azr_devops.setTitle",
+          "command": "board_azr_devops.editDescription",
           "when": "viewItem == workItem",
           "group": "1_edit@2"
         },
         {
-          "command": "board_azr_devops.assignMe",
+          "command": "board_azr_devops.comment",
           "when": "viewItem == workItem",
           "group": "1_edit@3"
         },
         {
-          "command": "board_azr_devops.comment",
+          "command": "board_azr_devops.addChild",
           "when": "viewItem == workItem",
           "group": "1_edit@4"
         },
@@ -206,6 +260,11 @@
         }
       ],
       "view/title": [
+        {
+          "command": "board_azr_devops.newItem",
+          "when": "view == board_azr_devops.items && !board_azr_devops.noOrg",
+          "group": "navigation@0"
+        },
         {
           "command": "board_azr_devops.showAll",
           "when": "view == board_azr_devops.items && board_azr_devops.mode != all",
@@ -246,6 +305,36 @@
           "when": "view == board_azr_devops.items",
           "group": "9_scope"
         }
+      ],
+      "board_azr_devops.editField": [
+        {
+          "command": "board_azr_devops.setState",
+          "group": "1@0"
+        },
+        {
+          "command": "board_azr_devops.setTitle",
+          "group": "1@1"
+        },
+        {
+          "command": "board_azr_devops.setPriority",
+          "group": "1@2"
+        },
+        {
+          "command": "board_azr_devops.setTags",
+          "group": "1@3"
+        },
+        {
+          "command": "board_azr_devops.assign",
+          "group": "1@4"
+        },
+        {
+          "command": "board_azr_devops.assignMe",
+          "group": "1@5"
+        },
+        {
+          "command": "board_azr_devops.setIteration",
+          "group": "1@6"
+        }
       ]
     },
     "configuration": {
@@ -276,6 +365,12 @@
           "description": "%config.notifyAssigned%"
         }
       }
-    }
+    },
+    "submenus": [
+      {
+        "id": "board_azr_devops.editField",
+        "label": "%submenu.editField%"
+      }
+    ]
   }
 }

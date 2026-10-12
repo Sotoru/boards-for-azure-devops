@@ -9,7 +9,9 @@ Browse and edit Azure DevOps work items from the VS Code sidebar. Not affiliated
 - Filter by state, type, assignee, iteration, tags and priority; filters are remembered per team.
 - Group by state, hierarchy (parent → children), assignee, or not at all.
 - Expand a work item for details; "Show all" opens a full view with comments.
-- Change state, title, assignee and add comments from the context menu.
+- Create work items (team area, current sprint) and child items.
+- Edit state, title, priority, tags, assignee (any team member) and sprint from the context menu or the full view.
+- Edit the description and write comments in a Markdown editor tab: saving sends them to Azure DevOps. Saves are rejected if someone else changed the item meanwhile, and the text stays in the editor.
 - Auto-refresh while the window is focused, badge with your open items, notification on new assignments.
 
 English and Italian. See [PLAN.md](PLAN.md) for the roadmap.
