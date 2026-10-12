@@ -4,6 +4,7 @@
   "description": "%description%",
   "version": "0.1.0",
   "publisher": "sotoru",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/Sotoru/boards-for-azure-devops"
