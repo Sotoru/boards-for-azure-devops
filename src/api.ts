@@ -181,8 +181,8 @@ export const getWorkItem = (w: WorkItem) => getWorkItemFull(w).then(r => r.field
 export const isMarkdown = (full: FullWorkItem, field: keyof Fields) => full.multilineFieldsFormat?.[field]?.toLowerCase() === 'markdown';
 
 // renderedText is the HTML of Markdown comments; plain HTML comments only have text.
-export const getComments = (w: WorkItem) =>
-  ado<{ comments: Comment[] }>(w.org, `${proj(w)}/_apis/wit/workItems/${w.id}/comments?api-version=7.1-preview.4`).then(r => r.comments);
+export const getComments = (w: WorkItem, order: 'asc' | 'desc' = 'asc') =>
+  ado<{ comments: Comment[] }>(w.org, `${proj(w)}/_apis/wit/workItems/${w.id}/comments?order=${order}&api-version=7.1-preview.4`).then(r => r.comments);
 
 export const addComment = (w: WorkItem, html: string) =>
   ado(w.org, `${proj(w)}/_apis/wit/workItems/${w.id}/comments?api-version=7.1-preview.4`, {
