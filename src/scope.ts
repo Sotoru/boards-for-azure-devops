@@ -11,7 +11,6 @@ export class ScopeStore {
 
   constructor(private readonly state: vscode.Memento) {
     this.status.command = 'board_azr_devops.switchScope';
-    this.status.tooltip = vscode.l10n.t('Azure Boards: switch organization, project and team');
     this.render();
     this.status.show();
   }
@@ -30,9 +29,11 @@ export class ScopeStore {
 
   private render() {
     const { org, project, team } = this.current;
-    this.status.text = org
-      ? `$(organization) ${org}${project ? ` · ${project}${team ? ` / ${team}` : ''}` : ''}`
-      : `$(organization) ${vscode.l10n.t('Choose organization')}`;
+    // Only the most specific name fits the status bar; the full path is in the tooltip.
+    this.status.text = `$(organization) ${team ?? project ?? org ?? vscode.l10n.t('Choose organization')}`;
+    this.status.tooltip = org
+      ? `${org}${project ? ` · ${project}${team ? ` / ${team}` : ''}` : ''}\n${vscode.l10n.t('Click to switch organization, project and team')}`
+      : vscode.l10n.t('Azure Boards: switch organization, project and team');
   }
 
   async pick() {
