@@ -17,7 +17,9 @@
   ],
   "main": "./dist/extension.js",
   "l10n": "./l10n",
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "scripts": {
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
@@ -46,22 +48,69 @@
     "views": {
       "board_azr_devops": [
         {
-          "id": "board_azr_devops.mine",
-          "name": "%view.mine%"
+          "id": "board_azr_devops.items",
+          "name": "%view.items%"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "board_azr_devops.mine",
-        "contents": "%view.mine.welcome%"
+        "view": "board_azr_devops.items",
+        "contents": "%view.welcome.noOrg%",
+        "when": "board_azr_devops.noOrg"
+      },
+      {
+        "view": "board_azr_devops.items",
+        "contents": "%view.welcome.noTeam%",
+        "when": "!board_azr_devops.noOrg && board_azr_devops.noTeam"
+      },
+      {
+        "view": "board_azr_devops.items",
+        "contents": "%view.welcome.emptyFiltered%",
+        "when": "board_azr_devops.emptyFiltered"
       }
     ],
     "commands": [
       {
         "command": "board_azr_devops.refresh",
         "title": "%cmd.refresh%",
-        "icon": "$(refresh)"
+        "icon": "$(refresh)",
+        "category": "Azure Boards"
+      },
+      {
+        "command": "board_azr_devops.showAll",
+        "title": "%cmd.showAll%",
+        "icon": "$(people)",
+        "category": "Azure Boards"
+      },
+      {
+        "command": "board_azr_devops.showMine",
+        "title": "%cmd.showMine%",
+        "icon": "$(person)",
+        "category": "Azure Boards"
+      },
+      {
+        "command": "board_azr_devops.filter",
+        "title": "%cmd.filter%",
+        "icon": "$(filter)",
+        "category": "Azure Boards"
+      },
+      {
+        "command": "board_azr_devops.filterActive",
+        "title": "%cmd.filter%",
+        "icon": "$(filter-filled)"
+      },
+      {
+        "command": "board_azr_devops.clearFilters",
+        "title": "%cmd.clearFilters%",
+        "icon": "$(clear-all)",
+        "category": "Azure Boards"
+      },
+      {
+        "command": "board_azr_devops.groupBy",
+        "title": "%cmd.groupBy%",
+        "icon": "$(list-tree)",
+        "category": "Azure Boards"
       },
       {
         "command": "board_azr_devops.switchScope",
@@ -118,6 +167,10 @@
         {
           "command": "board_azr_devops.comment",
           "when": "false"
+        },
+        {
+          "command": "board_azr_devops.filterActive",
+          "when": "false"
         }
       ],
       "view/item/context": [
@@ -154,9 +207,44 @@
       ],
       "view/title": [
         {
+          "command": "board_azr_devops.showAll",
+          "when": "view == board_azr_devops.items && board_azr_devops.mode != all",
+          "group": "navigation@1"
+        },
+        {
+          "command": "board_azr_devops.showMine",
+          "when": "view == board_azr_devops.items && board_azr_devops.mode == all",
+          "group": "navigation@1"
+        },
+        {
+          "command": "board_azr_devops.filter",
+          "when": "view == board_azr_devops.items && !board_azr_devops.filtered",
+          "group": "navigation@2"
+        },
+        {
+          "command": "board_azr_devops.filterActive",
+          "when": "view == board_azr_devops.items && board_azr_devops.filtered",
+          "group": "navigation@2"
+        },
+        {
+          "command": "board_azr_devops.clearFilters",
+          "when": "view == board_azr_devops.items && board_azr_devops.filtered",
+          "group": "navigation@3"
+        },
+        {
+          "command": "board_azr_devops.groupBy",
+          "when": "view == board_azr_devops.items",
+          "group": "navigation@4"
+        },
+        {
           "command": "board_azr_devops.refresh",
-          "when": "view == board_azr_devops.mine",
-          "group": "navigation"
+          "when": "view == board_azr_devops.items",
+          "group": "navigation@5"
+        },
+        {
+          "command": "board_azr_devops.switchScope",
+          "when": "view == board_azr_devops.items",
+          "group": "9_scope"
         }
       ]
     },
@@ -175,6 +263,17 @@
           "type": "string",
           "default": "SELECT [System.Id] FROM WorkItems WHERE [System.AssignedTo] = @Me AND [System.State] NOT IN ('Closed','Done','Removed','Resolved') ORDER BY [System.ChangedDate] DESC",
           "description": "%config.query%"
+        },
+        "board_azr_devops.refreshMinutes": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "description": "%config.refreshMinutes%"
+        },
+        "board_azr_devops.notifyAssigned": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.notifyAssigned%"
         }
       }
     }

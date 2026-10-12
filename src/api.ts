@@ -1,28 +1,25 @@
 import * as vscode from 'vscode';
+import type { TeamField } from './filters';
 import { normalizeTenant, unique } from './text';
+import type { Comment, Fields, WorkItem } from './types';
 
 // Azure DevOps resource ID: lets VS Code's built-in Microsoft login issue the token, no PAT to store.
 const ADO_SCOPE = '499b84ac-1321-427f-aa17-267ca6975798/.default';
 
-export interface Fields {
-  'System.Title': string;
-  'System.State': string;
-  'System.WorkItemType': string;
-  'System.TeamProject': string;
-  'System.AssignedTo'?: { displayName: string; uniqueName: string };
-  'System.IterationPath'?: string;
-  'System.AreaPath'?: string;
-  'System.Tags'?: string;
-  'System.Description'?: string;
-  'Microsoft.VSTS.Common.AcceptanceCriteria'?: string;
-  'Microsoft.VSTS.TCM.ReproSteps'?: string;
-}
-export interface WorkItem { org: string; id: number; fields: Fields }
-export interface Comment { text: string; createdDate: string; createdBy?: { displayName: string } }
+export type { Comment, Fields, WorkItem } from './types';
 
-export function session(tenant?: string) {
+// Background polling must not pop up a login dialog; interactive login is allowed once the user touches the extension.
+let interactive = false;
+export const allowLogin = () => { interactive = true; };
+export class NotSignedIn extends Error {}
+
+export async function session(tenant?: string) {
   const scopes = tenant ? [ADO_SCOPE, `VSCODE_TENANT:${tenant}`] : [ADO_SCOPE];
-  return vscode.authentication.getSession('microsoft', scopes, { createIfNone: true });
+  const s = interactive
+    ? await vscode.authentication.getSession('microsoft', scopes, { createIfNone: true })
+    : await vscode.authentication.getSession('microsoft', scopes, { silent: true });
+  if (!s) throw new NotSignedIn();
+  return s;
 }
 
 // The org's tenant comes back in a header even on the unauthenticated redirect, so no login is needed to find it.
@@ -79,18 +76,40 @@ export const listTeams = (org: string, project: string) =>
   ado<{ value: { name: string }[] }>(org, `_apis/projects/${encodeURIComponent(project)}/teams?api-version=7.1&$top=500`)
     .then(r => r.value.map(t => t.name));
 
-export async function fetchMine(org: string): Promise<WorkItem[]> {
-  const query = vscode.workspace.getConfiguration('board_azr_devops').get<string>('query');
-  const { workItems } = await ado<{ workItems: { id: number }[] }>(org, '_apis/wit/wiql?api-version=7.1&$top=200', {
+const LIST_FIELDS = [
+  'System.Title', 'System.State', 'System.WorkItemType', 'System.TeamProject', 'System.AssignedTo', 'System.IterationPath',
+  'System.Tags', 'System.Parent', 'System.Description', 'Microsoft.VSTS.Common.Priority',
+].join(',');
+
+// The batch endpoint takes at most 200 ids per call.
+async function fetchByIds(org: string, ids: number[]): Promise<WorkItem[]> {
+  const chunks = Array.from({ length: Math.ceil(ids.length / 200) }, (_, i) => ids.slice(i * 200, i * 200 + 200));
+  const pages = await Promise.all(chunks.map(c =>
+    ado<{ value: { id: number; fields: Fields }[] }>(org, `_apis/wit/workitems?ids=${c.join(',')}&fields=${LIST_FIELDS}&errorPolicy=omit&api-version=7.1`)));
+  return pages.flatMap(p => p.value.filter(Boolean).map(w => ({ org, id: w.id, fields: w.fields })));
+}
+
+async function wiql(org: string, scopePath: string, query: string) {
+  const { workItems } = await ado<{ workItems: { id: number }[] }>(org, `${scopePath}_apis/wit/wiql?api-version=7.1&$top=1000`, {
     method: 'POST',
     body: JSON.stringify({ query }),
   });
-  if (!workItems.length) return [];
-  const fields = 'System.Title,System.State,System.WorkItemType,System.TeamProject,System.AssignedTo,System.IterationPath,System.Tags,System.Description';
-  const ids = workItems.map(w => w.id).join(',');
-  const { value } = await ado<{ value: { id: number; fields: Fields }[] }>(org, `_apis/wit/workitems?ids=${ids}&fields=${fields}&api-version=7.1`);
-  return value.map(w => ({ org, id: w.id, fields: w.fields }));
+  return fetchByIds(org, workItems.map(w => w.id));
 }
+
+export const fetchMine = (org: string) =>
+  wiql(org, '', vscode.workspace.getConfiguration('board_azr_devops').get<string>('query')!);
+
+const teamPath = (project: string, team: string) => `${encodeURIComponent(project)}/${encodeURIComponent(team)}/`;
+
+export async function getTeamField(org: string, project: string, team: string): Promise<TeamField> {
+  const r = await ado<{ field: { referenceName: string }; values: { value: string; includeChildren: boolean }[] }>(
+    org, `${teamPath(project, team)}_apis/work/teamsettings/teamfieldvalues?api-version=7.1`);
+  return { field: r.field.referenceName, values: r.values };
+}
+
+export const fetchByTeamQuery = (org: string, project: string, team: string, query: string) =>
+  wiql(org, teamPath(project, team), query);
 
 export const getWorkItem = (w: WorkItem) =>
   ado<{ fields: Fields }>(w.org, `_apis/wit/workitems/${w.id}?api-version=7.1`).then(r => r.fields);

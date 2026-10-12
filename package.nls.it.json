@@ -1,7 +1,5 @@
 {
   "description": "Consulta, filtra e modifica i work item di Azure DevOps dalla sidebar di VS Code.",
-  "view.mine": "Assegnati a me",
-  "view.mine.welcome": "Nessuna organizzazione selezionata.\n[Scegli organizzazione](command:board_azr_devops.switchScope)",
   "cmd.refresh": "Aggiorna",
   "cmd.switchScope": "Cambia organizzazione, progetto e team",
   "cmd.open": "Apri nel browser",
@@ -11,5 +9,16 @@
   "cmd.assignMe": "Assegna a me",
   "cmd.comment": "Commenta",
   "config.organizations": "Organizzazioni Azure DevOps aggiuntive (la parte dopo `dev.azure.com/`). Quelle dell'account con cui hai fatto login vengono trovate in automatico; aggiungi qui quelle di altri tenant.",
-  "config.query": "Query WIQL per la vista \"Assegnati a me\""
+  "config.query": "Query WIQL per la vista \"Assegnati a me\"",
+  "view.items": "Work item",
+  "view.welcome.noOrg": "Nessuna organizzazione selezionata.\n[Scegli organizzazione](command:board_azr_devops.switchScope)",
+  "view.welcome.noTeam": "Scegli progetto e team per vedere tutti i work item del team.\n[Scegli team](command:board_azr_devops.switchScope)",
+  "view.welcome.emptyFiltered": "Nessun work item corrisponde ai filtri attivi.\n[Azzera filtri](command:board_azr_devops.clearFilters)",
+  "cmd.showAll": "Mostra tutti i work item del team",
+  "cmd.showMine": "Mostra solo i miei",
+  "cmd.filter": "Filtra…",
+  "cmd.clearFilters": "Azzera filtri",
+  "cmd.groupBy": "Raggruppa per…",
+  "config.refreshMinutes": "Minuti tra un aggiornamento automatico e l'altro (solo con la finestra in primo piano).",
+  "config.notifyAssigned": "Mostra una notifica quando ti viene assegnato un work item."
 }

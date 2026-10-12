@@ -5,8 +5,12 @@ Browse and edit Azure DevOps work items from the VS Code sidebar. Not affiliated
 - Sign in with the Microsoft account built into VS Code, no personal access token needed.
 - Organizations of your account are discovered automatically. Add others (e.g. in a different tenant) in `board_azr_devops.organizations`.
 - Switch organization, project and team from the status bar.
-- Work items assigned to you, expandable for details. "Show all" opens a full view with comments.
+- Toggle between work items assigned to you and all work items of the team (current sprint by default).
+- Filter by state, type, assignee, iteration, tags and priority; filters are remembered per team.
+- Group by state, hierarchy (parent → children), assignee, or not at all.
+- Expand a work item for details; "Show all" opens a full view with comments.
 - Change state, title, assignee and add comments from the context menu.
+- Auto-refresh while the window is focused, badge with your open items, notification on new assignments.
 
 English and Italian. See [PLAN.md](PLAN.md) for the roadmap.
 

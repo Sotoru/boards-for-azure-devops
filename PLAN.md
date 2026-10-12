@@ -10,7 +10,7 @@
 - Toggle "Mine / All". "All" = work items in the team's area paths.
 - Filter (funnel icon): one multi-select QuickPick grouped by state, type, assignee, sprint (default: current), tags, priority. Client-side except sprint (re-queries). Remembered per team. Active filters summarized in the view description, with a clear button.
 - Text search: native tree type-to-filter.
-- Group by: state (default), hierarchy, assignee, none. Expanding an item shows "Details" as first child, then its children.
+- Group by: state (default), hierarchy, assignee, none. Expanding an item shows its details; items with children (hierarchy) show a "Details" node first, then the children.
 - Auto-refresh every 5 min while the window is focused, and on focus. Badge with my open items. Notification on new assignment (can be disabled).
 
 **Editing**
@@ -39,8 +39,8 @@
 
 ## Phases
 
-1. **Foundation**: TypeScript + esbuild, l10n, multiple orgs with tenant detection, project/team in the status bar.
-2. **Sidebar**: Mine/All, filters, group by, details node, polling, badge, notifications.
+1. ✅ **Foundation**: TypeScript + esbuild, l10n, multiple orgs with tenant detection, project/team in the status bar.
+2. ✅ **Sidebar**: Mine/All, filters, group by, details node, polling, badge, notifications.
 3. **Editing**: create, all fields, Markdown editor for description/comments.
 4. **Git**: start working, active item, commit reference, linked PRs/commits.
 5. **Kanban**.

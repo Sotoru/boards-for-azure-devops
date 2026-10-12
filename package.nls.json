@@ -2,8 +2,6 @@
   "displayName": "Boards for Azure DevOps",
   "description": "Browse, filter and edit Azure DevOps work items from the VS Code sidebar.",
   "container.title": "Azure Boards",
-  "view.mine": "Assigned to me",
-  "view.mine.welcome": "No organization selected.\n[Choose organization](command:board_azr_devops.switchScope)",
   "cmd.refresh": "Refresh",
   "cmd.switchScope": "Switch organization, project and team",
   "cmd.open": "Open in browser",
@@ -13,5 +11,16 @@
   "cmd.assignMe": "Assign to me",
   "cmd.comment": "Comment",
   "config.organizations": "Extra Azure DevOps organizations (the part after `dev.azure.com/`). Organizations of the signed-in account are discovered automatically; add here the ones in other tenants.",
-  "config.query": "WIQL query for the \"Assigned to me\" view"
+  "config.query": "WIQL query for the \"Assigned to me\" view",
+  "view.items": "Work items",
+  "view.welcome.noOrg": "No organization selected.\n[Choose organization](command:board_azr_devops.switchScope)",
+  "view.welcome.noTeam": "Pick a project and team to see all of the team's work items.\n[Choose team](command:board_azr_devops.switchScope)",
+  "view.welcome.emptyFiltered": "No work items match the active filters.\n[Clear filters](command:board_azr_devops.clearFilters)",
+  "cmd.showAll": "Show all team work items",
+  "cmd.showMine": "Show only mine",
+  "cmd.filter": "Filter…",
+  "cmd.clearFilters": "Clear filters",
+  "cmd.groupBy": "Group by…",
+  "config.refreshMinutes": "Minutes between automatic refreshes (only while the window is focused).",
+  "config.notifyAssigned": "Show a notification when a work item is assigned to you."
 }
