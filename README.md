@@ -18,6 +18,12 @@ Browse and edit Azure DevOps work items from the VS Code sidebar. Not affiliated
 - Linked pull requests and commits in the full view.
 - Auto-refresh while the window is focused, badge with your open items, notification on new assignments.
 
+## AI assistants
+
+- **Copilot / VS Code MCP clients:** the extension offers the official [Azure DevOps MCP server](https://github.com/microsoft/azure-devops-mcp) (`@azure-devops/mcp`) for the active organization, with its tenant. Disable with `board_azr_devops.registerMcp` if you configured it yourself.
+- **Copy for AI** (context menu or full view) copies a work item as Markdown: fields, description, acceptance criteria, repro steps, comments.
+- **"Work on the current item"**: the work item id is the number in the branch name (`feature/123`), so an assistant with Git access and the MCP server can find and read it without extra setup.
+
 English and Italian. See [PLAN.md](PLAN.md) for the roadmap.
 
 ## Build

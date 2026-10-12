@@ -8,7 +8,7 @@ const t = vscode.l10n.t;
 const ACTIONS: [string, string][] = [
   ['setState', 'Change state'], ['setTitle', 'Edit title'], ['setPriority', 'Priority'], ['setTags', 'Tags'],
   ['assign', 'Assign…'], ['setIteration', 'Sprint'], ['editDescription', 'Edit description'], ['comment', 'Comment'], ['addChild', 'Add child'],
-  ['startWork', 'Start working'],
+  ['startWork', 'Start working'], ['copyForAi', 'Copy for AI'],
 ];
 export const EDIT_COMMANDS = ACTIONS.map(([c]) => `board_azr_devops.${c}`);
 

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { allowLogin, webUrl, WorkItem } from './api';
 import { SCHEME, WorkItemEditorFs } from './editorFs';
 import { createInScope, edits } from './edits';
+import { copyForAi, registerMcp } from './ai';
 import { BoardPanel } from './board';
 import { GitIntegration } from './git';
 import { clearFilters, pickFilters, pickGroupBy } from './filterPick';
@@ -96,6 +97,8 @@ export function activate(ctx: vscode.ExtensionContext) {
     command('preview', preview),
     command('startWork', async (w: WorkItem) => { await git.startWork(w); await afterChange(w); }),
     command('openBoard', () => board.show()),
+    command('copyForAi', copyForAi),
+    registerMcp(scope),
     command('openActive', () => git.active && preview(git.active)),
     command('newItem', async () => {
       const created = await createInScope(scope);
