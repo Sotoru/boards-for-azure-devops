@@ -180,6 +180,12 @@
         "command": "board_azr_devops.openActive",
         "title": "%cmd.openActive%",
         "category": "Azure Boards"
+      },
+      {
+        "command": "board_azr_devops.openBoard",
+        "title": "%cmd.openBoard%",
+        "icon": "$(project)",
+        "category": "Azure Boards"
       }
     ],
     "menus": {
@@ -315,9 +321,14 @@
           "group": "navigation@4"
         },
         {
+          "command": "board_azr_devops.openBoard",
+          "when": "view == board_azr_devops.items && !board_azr_devops.noOrg",
+          "group": "navigation@5"
+        },
+        {
           "command": "board_azr_devops.refresh",
           "when": "view == board_azr_devops.items",
-          "group": "navigation@5"
+          "group": "navigation@6"
         },
         {
           "command": "board_azr_devops.switchScope",

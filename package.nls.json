@@ -35,5 +35,6 @@
   "cmd.openActive": "Show work item of the current branch",
   "config.branchTemplate": "Branch name for \"Start working\". Placeholders: `{type}` (`bugfix` for bugs, `feature` otherwise), `{id}`, `{title}` (slug).",
   "config.baseBranch": "Branch to start from, e.g. `origin/develop`. Empty: the remote's default branch (`origin/HEAD`, then `origin/main`, `origin/master`).",
-  "config.commitReference": "Prefill an empty commit message with `#<id>` of the work item of the current branch (links the commit in Azure Repos)."
+  "config.commitReference": "Prefill an empty commit message with `#<id>` of the work item of the current branch (links the commit in Azure Repos).",
+  "cmd.openBoard": "Open board"
 }

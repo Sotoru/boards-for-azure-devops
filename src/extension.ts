@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { allowLogin, webUrl, WorkItem } from './api';
 import { SCHEME, WorkItemEditorFs } from './editorFs';
 import { createInScope, edits } from './edits';
+import { BoardPanel } from './board';
 import { GitIntegration } from './git';
 import { clearFilters, pickFilters, pickGroupBy } from './filterPick';
 import { activeFilterCount } from './filters';
@@ -19,6 +20,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   const editorFs = new WorkItemEditorFs();
   const git = new GitIntegration(scope);
   const tree = new WorkItemTree(model, () => git.active?.id);
+  const board = new BoardPanel(ctx.extensionUri, ctx.globalState, model, () => git.active?.id);
   const view = vscode.window.createTreeView('board_azr_devops.items', { treeDataProvider: tree, showCollapseAll: true });
   const safe = <A extends unknown[]>(fn: (...a: A) => unknown) => (...args: A) => {
     allowLogin();
@@ -93,6 +95,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     command('open', (w: WorkItem) => vscode.env.openExternal(vscode.Uri.parse(webUrl(w)))),
     command('preview', preview),
     command('startWork', async (w: WorkItem) => { await git.startWork(w); await afterChange(w); }),
+    command('openBoard', () => board.show()),
     command('openActive', () => git.active && preview(git.active)),
     command('newItem', async () => {
       const created = await createInScope(scope);

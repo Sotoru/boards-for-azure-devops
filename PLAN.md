@@ -43,5 +43,5 @@
 2. ✅ **Sidebar**: Mine/All, filters, group by, details node, polling, badge, notifications.
 3. ✅ **Editing**: create, all fields, Markdown editor for description/comments.
 4. ✅ **Git**: start working, active item, commit reference, linked PRs/commits.
-5. **Kanban**.
+5. ✅ **Kanban**.
 6. **AI**: MCP registration for Copilot, copy for AI.

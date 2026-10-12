@@ -23,16 +23,18 @@ export class Model {
   get mode(): Mode { return this.state.get<Mode>('mode', 'mine'); }
   async setMode(m: Mode) { await this.state.update('mode', m); await this.refresh(); }
 
-  /** Filters and grouping are remembered per team in "All", per org in "Mine". */
-  private get key() {
+  /** Filters and grouping are remembered per team in "All" (shared with the board), per org in "Mine". */
+  private keyFor(mode: Mode) {
     const { org, project, team } = this.scope.current;
-    return this.mode === 'mine' ? `mine:${org}` : `all:${org}/${project}/${team}`;
+    return mode === 'mine' ? `mine:${org}` : `all:${org}/${project}/${team}`;
   }
+  private get key() { return this.keyFor(this.mode); }
 
-  get filters(): Filters { return { ...defaultFilters(), ...this.state.get<Partial<Filters>>(`filters:${this.key}`) }; }
-  async setFilters(f: Filters) {
-    const refetch = this.mode === 'all' && f.currentSprint !== this.filters.currentSprint;
-    await this.state.update(`filters:${this.key}`, f);
+  filtersFor(mode: Mode): Filters { return { ...defaultFilters(), ...this.state.get<Partial<Filters>>(`filters:${this.keyFor(mode)}`) }; }
+  get filters() { return this.filtersFor(this.mode); }
+  async setFilters(f: Filters, mode: Mode = this.mode) {
+    const refetch = mode === 'all' && this.mode === 'all' && f.currentSprint !== this.filtersFor(mode).currentSprint;
+    await this.state.update(`filters:${this.keyFor(mode)}`, f);
     if (refetch) await this.refresh(); else this.changed.fire();
   }
 

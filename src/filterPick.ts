@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { defaultFilters, FILTER_KEYS, FilterKey, filterOptions, Filters, GroupBy } from './filters';
-import { Model } from './model';
+import { Mode, Model } from './model';
+import type { WorkItem } from './types';
 
 const t = vscode.l10n.t;
 type Item = vscode.QuickPickItem & { key?: FilterKey; value?: string; sprint?: true };
@@ -11,12 +12,12 @@ const sectionTitle = (): Record<FilterKey, string> => ({
 const emptyLabel = (k: FilterKey) => (k === 'assignee' ? t('Unassigned') : t('(none)'));
 
 /** One multi-select QuickPick with a section per field; options come from the loaded data. */
-export async function pickFilters(model: Model) {
-  const f = model.filters;
-  const options = filterOptions(model.items);
+export async function pickFilters(model: Model, mode: Mode = model.mode, data: WorkItem[] = model.items) {
+  const f = model.filtersFor(mode);
+  const options = filterOptions(data);
   const titles = sectionTitle();
   const items: Item[] = [];
-  if (model.mode === 'all') {
+  if (mode === 'all') {
     items.push({ label: t('Sprint'), kind: vscode.QuickPickItemKind.Separator },
       { label: t('Current sprint only'), description: t('uncheck to include backlog and other sprints'), picked: f.currentSprint, sprint: true });
   }
@@ -32,7 +33,7 @@ export async function pickFilters(model: Model) {
   const next = defaultFilters();
   next.currentSprint = picked.some(i => i.sprint);
   for (const i of picked) if (i.key) next[i.key].push(i.value!);
-  await model.setFilters(next);
+  await model.setFilters(next, mode);
 }
 
 export async function pickGroupBy(model: Model) {

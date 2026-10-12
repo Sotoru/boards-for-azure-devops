@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { Board } from './boardLogic';
 import type { TeamField } from './filters';
 import { normalizeTenant, unique } from './text';
 import type { Comment, Fields, WorkItem } from './types';
@@ -82,19 +83,20 @@ const LIST_FIELDS = [
 ].join(',');
 
 // The batch endpoint takes at most 200 ids per call.
-async function fetchByIds(org: string, ids: number[]): Promise<WorkItem[]> {
+async function fetchByIds(org: string, ids: number[], extraFields: string[] = []): Promise<WorkItem[]> {
   const chunks = Array.from({ length: Math.ceil(ids.length / 200) }, (_, i) => ids.slice(i * 200, i * 200 + 200));
+  const fields = [LIST_FIELDS, ...extraFields].join(',');
   const pages = await Promise.all(chunks.map(c =>
-    ado<{ value: { id: number; fields: Fields }[] }>(org, `_apis/wit/workitems?ids=${c.join(',')}&fields=${LIST_FIELDS}&errorPolicy=omit&api-version=7.1`)));
+    ado<{ value: { id: number; fields: Fields }[] }>(org, `_apis/wit/workitems?ids=${c.join(',')}&fields=${fields}&errorPolicy=omit&api-version=7.1`)));
   return pages.flatMap(p => p.value.filter(Boolean).map(w => ({ org, id: w.id, fields: w.fields })));
 }
 
-async function wiql(org: string, scopePath: string, query: string) {
+async function wiql(org: string, scopePath: string, query: string, extraFields?: string[]) {
   const { workItems } = await ado<{ workItems: { id: number }[] }>(org, `${scopePath}_apis/wit/wiql?api-version=7.1&$top=1000`, {
     method: 'POST',
     body: JSON.stringify({ query }),
   });
-  return fetchByIds(org, workItems.map(w => w.id));
+  return fetchByIds(org, workItems.map(w => w.id), extraFields);
 }
 
 export const fetchMine = (org: string) =>
@@ -136,12 +138,14 @@ export async function listTypes(org: string, project: string) {
 }
 
 type Patch = { op: string; path: string; value?: unknown };
-const fieldOps = (fields: Partial<Record<keyof Fields, unknown>>): Patch[] =>
+/** Known fields autocomplete; any other reference name (e.g. a board column field) is allowed too. */
+export type FieldValues = Partial<Record<keyof Fields | (string & {}), unknown>>;
+const fieldOps = (fields: FieldValues): Patch[] =>
   Object.entries(fields).map(([k, value]) => ({ op: 'add', path: `/fields/${k}`, value }));
 const patchInit = (ops: Patch[]): RequestInit =>
   ({ method: 'PATCH', headers: { 'Content-Type': 'application/json-patch+json' }, body: JSON.stringify(ops) });
 
-export async function createWorkItem(org: string, project: string, type: string, fields: Partial<Record<keyof Fields, unknown>>, parentId?: number) {
+export async function createWorkItem(org: string, project: string, type: string, fields: FieldValues, parentId?: number) {
   const ops = fieldOps(fields);
   if (parentId) {
     ops.push({ op: 'add', path: '/relations/-', value: {
@@ -154,8 +158,19 @@ export async function createWorkItem(org: string, project: string, type: string,
   return { org, id: r.id, fields: r.fields } satisfies WorkItem;
 }
 
-export const fetchByTeamQuery = (org: string, project: string, team: string, query: string) =>
-  wiql(org, teamPath(project, team), query);
+export const fetchByTeamQuery = (org: string, project: string, team: string, query: string, extraFields?: string[]) =>
+  wiql(org, teamPath(project, team), query, extraFields);
+
+export const listBoards = (org: string, project: string, team: string) =>
+  ado<{ value: { id: string; name: string }[] }>(org, `${teamPath(project, team)}_apis/work/boards?api-version=7.1`).then(r => r.value);
+
+export const getBoard = (org: string, project: string, team: string, board: string) =>
+  ado<Board>(org, `${teamPath(project, team)}_apis/work/boards/${encodeURIComponent(board)}?api-version=7.1`);
+
+/** Type name → hex color as shown on Azure DevOps cards. */
+export const typeColors = (org: string, project: string) =>
+  ado<{ value: { name: string; color?: string }[] }>(org, `${encodeURIComponent(project)}/_apis/wit/workitemtypes?api-version=7.1`)
+    .then(r => Object.fromEntries(r.value.map(t => [t.name, t.color ? `#${t.color.slice(-6)}` : ''])));
 
 export interface FullWorkItem {
   rev: number; fields: Fields; multilineFieldsFormat?: Record<string, string>; relations?: { rel: string; url: string }[];
@@ -198,7 +213,7 @@ export const getCommit = (org: string, projectId: string, repoId: string, sha: s
  * `rev` makes Azure DevOps reject the update if someone else changed the item since it was read,
  * so a long edit in the editor can't silently overwrite their changes.
  */
-export function update(w: WorkItem, fields: Partial<Record<keyof Fields, unknown>>, opts: { rev?: number; markdown?: (keyof Fields)[] } = {}) {
+export function update(w: WorkItem, fields: FieldValues, opts: { rev?: number; markdown?: (keyof Fields)[] } = {}) {
   const ops: Patch[] = [
     ...(opts.rev !== undefined ? [{ op: 'test', path: '/rev', value: opts.rev }] : []),
     ...fieldOps(fields),

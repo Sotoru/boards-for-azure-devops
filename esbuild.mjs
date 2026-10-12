@@ -13,5 +13,19 @@ const ctx = await esbuild.context({
   minify: production,
   logLevel: 'info',
 });
-if (process.argv.includes('--watch')) await ctx.watch();
-else { await ctx.rebuild(); await ctx.dispose(); }
+// Script that runs inside the Kanban webview (browser, no Node, no vscode module).
+const webview = await esbuild.context({
+  entryPoints: ['src/webview/board.ts'],
+  bundle: true,
+  format: 'iife',
+  platform: 'browser',
+  target: 'es2022',
+  outfile: 'dist/board.js',
+  sourcemap: !production,
+  minify: production,
+  logLevel: 'info',
+});
+for (const c of [ctx, webview]) {
+  if (process.argv.includes('--watch')) await c.watch();
+  else { await c.rebuild(); await c.dispose(); }
+}
