@@ -1,26 +1,25 @@
 import * as vscode from 'vscode';
-import { getComments, getWorkItemFull, isMarkdown, tenantOf, webUrl, WorkItem } from './api';
+import { getWorkItemFull, isMarkdown, tenantOf, WorkItem } from './api';
 import { aiMarkdown } from './aiText';
+import { branchName } from './gitText';
 import { htmlToMarkdown } from './markdown';
 import { ScopeStore } from './scope';
 
 const t = vscode.l10n.t;
 
-/** Copies the work item as Markdown (fields, texts, comments) for pasting into an AI chat. */
+/** Copies the work item as minimal Markdown (title, description, branch and commit conventions) for pasting into an AI chat. */
 export async function copyForAi(w: WorkItem) {
-  const [full, comments] = await Promise.all([getWorkItemFull(w), getComments(w)]);
+  const full = await getWorkItemFull(w);
   const f = full.fields;
-  const md = (field: 'System.Description' | 'Microsoft.VSTS.Common.AcceptanceCriteria' | 'Microsoft.VSTS.TCM.ReproSteps') =>
+  const md = (field: 'System.Description' | 'Microsoft.VSTS.TCM.ReproSteps') =>
     f[field] && (isMarkdown(full, field) ? f[field] : htmlToMarkdown(f[field]!));
+  const template = vscode.workspace.getConfiguration('board_azr_devops').get('branchTemplate', '{type}/{id}');
   await vscode.env.clipboard.writeText(aiMarkdown({
     id: w.id,
-    url: webUrl({ ...w, fields: f }),
     fields: f,
     description: md('System.Description'),
-    acceptanceCriteria: md('Microsoft.VSTS.Common.AcceptanceCriteria'),
     reproSteps: md('Microsoft.VSTS.TCM.ReproSteps'),
-    // A comment with renderedText was written in Markdown (text is the source); otherwise text is HTML.
-    comments: comments.map(c => ({ author: c.createdBy?.displayName, date: c.createdDate, text: c.renderedText ? c.text : htmlToMarkdown(c.text) })),
+    branch: branchName(template, { ...w, fields: f }),
   }));
   vscode.window.setStatusBarMessage(t('#{0} copied as Markdown for AI', w.id), 4000);
 }
@@ -40,11 +39,13 @@ export function registerMcp(scope: ScopeStore): vscode.Disposable {
   const registration = api.lm.registerMcpServerDefinitionProvider('board_azr_devops.mcp', {
     onDidChangeMcpServerDefinitions: changed.event,
     async provideMcpServerDefinitions() {
-      const { org } = scope.current;
+      const { org, project, team } = scope.current;
       if (!org || !vscode.workspace.getConfiguration('board_azr_devops').get('registerMcp', true)) return [];
       const tenant = await tenantOf(org);
       const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-      return [new Stdio(`Azure DevOps (${org})`, npx, ['-y', '@azure-devops/mcp', org, ...(tenant ? ['--tenant', tenant] : [])])];
+      // The scope's project and team become the server's defaults, so "work on #1234" needs no project.
+      const env: Record<string, string> = { ...(project ? { ado_mcp_project: project } : {}), ...(team ? { ado_mcp_team: team } : {}) };
+      return [new Stdio(`Azure DevOps (${org})`, npx, ['-y', '@azure-devops/mcp', org, ...(tenant ? ['--tenant', tenant] : [])], env)];
     },
   });
   return vscode.Disposable.from(

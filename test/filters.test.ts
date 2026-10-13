@@ -44,6 +44,12 @@ test('groupItems: states in process order, unknown last; unassigned last', () =>
   assert.deepEqual(groupItems(items, 'assignee').map(g => [g.key, g.items.length]), [['Alice', 2], ['', 2]]);
 });
 
+test('groupItems by column: board order, unknown after, off-board last', () => {
+  const col = (id: number, c?: string) => wi(id, (c ? { 'WEF_1_Kanban.Column': c } : {}) as Partial<Fields>);
+  const groups = groupItems([col(1, 'Done'), col(2), col(3, 'Code review'), col(4, 'Extra'), col(5, 'Done')], 'column', ['New', 'Code review', 'Done']);
+  assert.deepEqual(groups.map(g => [g.key, g.items.length]), [['Code review', 1], ['Done', 2], ['Extra', 1], ['', 1]]);
+});
+
 test('hierarchy nests children under parents in the list only', () => {
   const h = hierarchy(items);
   assert.deepEqual(h.roots.map(w => w.id), [1, 2, 4]);

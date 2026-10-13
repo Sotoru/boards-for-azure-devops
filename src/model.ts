@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { fetchByTeamQuery, fetchMine, getTeamField, NotSignedIn, WorkItem } from './api';
+import { fetchByTeamQuery, fetchMine, getBoard, getTeamField, listBoards, NotSignedIn, WorkItem } from './api';
 import { applyFilters, defaultFilters, Filters, GroupBy, newAssignments, teamQuery } from './filters';
 import { ScopeStore } from './scope';
 
@@ -14,6 +14,8 @@ export class Model {
 
   mine: WorkItem[] = [];
   items: WorkItem[] = [];
+  /** Column names of the team's boards in board order; filled only when grouping by column. */
+  columns: string[] = [];
   loaded = false;
   lastRefresh = 0;
   private running?: Promise<void>;
@@ -39,7 +41,19 @@ export class Model {
   }
 
   get groupBy(): GroupBy { return this.state.get<GroupBy>(`groupBy:${this.key}`, 'state'); }
-  async setGroupBy(g: GroupBy) { await this.state.update(`groupBy:${this.key}`, g); this.changed.fire(); }
+  async setGroupBy(g: GroupBy) {
+    // Board columns are fetched only for column grouping, so switching to it needs a reload.
+    const refetch = g === 'column' && this.groupBy !== 'column';
+    await this.state.update(`groupBy:${this.key}`, g);
+    if (refetch) await this.refresh(); else this.changed.fire();
+  }
+
+  /** Each team board has its own column field: fetch them all with the list so items can be grouped by column. */
+  private async boardColumns(org: string, project?: string, team?: string) {
+    if (this.groupBy !== 'column' || !project || !team) return { fields: [], columns: [] };
+    const boards = await Promise.all((await listBoards(org, project, team)).map(b => getBoard(org, project, team, b.id)));
+    return { fields: boards.map(b => b.fields.columnField.referenceName), columns: [...new Set(boards.flatMap(b => b.columns.map(c => c.name)))] };
+  }
 
   get visible() { return applyFilters(this.items, this.filters); }
 
@@ -53,12 +67,14 @@ export class Model {
     let signedOut = false;
     try {
       if (!org) { this.mine = this.items = []; return; }
-      this.mine = await fetchMine(org);
+      const { fields, columns } = await this.boardColumns(org, project, team);
+      this.columns = columns;
+      this.mine = await fetchMine(org, fields);
       this.checkAssignments(org);
       if (this.mode === 'mine') this.items = this.mine;
       else if (project && team) {
         const field = await getTeamField(org, project, team);
-        this.items = await fetchByTeamQuery(org, project, team, teamQuery(field, this.filters.currentSprint));
+        this.items = await fetchByTeamQuery(org, project, team, teamQuery(field, this.filters.currentSprint), fields);
       } else this.items = [];
     } catch (e) {
       // Not signed in yet: background polling stays quiet until the user opens the view or runs a command.

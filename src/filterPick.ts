@@ -39,6 +39,7 @@ export async function pickFilters(model: Model, mode: Mode = model.mode, data: W
 export async function pickGroupBy(model: Model) {
   const choices: (vscode.QuickPickItem & { by: GroupBy })[] = [
     { label: t('State'), by: 'state' },
+    { label: t('Board column'), description: t("the team's boards"), by: 'column' },
     { label: t('Hierarchy'), description: t('parent → children'), by: 'hierarchy' },
     { label: t('Assigned to'), by: 'assignee' },
     { label: t('None'), by: 'none' },

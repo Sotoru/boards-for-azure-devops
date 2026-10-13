@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import {
   createWorkItem, defaultTeam, getBacklogIteration, getBoard, getTeamField, getWorkItemFull, isMarkdown, listBoards, listIterations, listMembers,
-  listStates, listTypes, myIdentity, update, webUrl, WorkItem,
+  listStates, listTypes, myIdentity, searchItems, setParent, update, webUrl, WorkItem,
 } from './api';
 import { columnOf } from './boardLogic';
 import { editorUri, WorkItemEditorFs } from './editorFs';
@@ -39,28 +39,74 @@ async function pickType(org: string, project: string) {
   return choose(listTypes(org, project).then(ts => ts.map(value => ({ label: value, value }))), undefined, t('Work item type'));
 }
 
+const project = (w: WorkItem) => w.fields['System.TeamProject'];
+const wiqlString = (s: string) => `'${s.replace(/'/g, "''")}'`;
+
+/** Parent picker: open items in the same area (other types), or a search by title or #id as you type. */
+async function pickParent(w: WorkItem): Promise<number | null | undefined> {
+  const qp = vscode.window.createQuickPick<vscode.QuickPickItem & { id: number | null }>();
+  qp.placeholder = t('Parent of #{0}: search by title or #id', w.id);
+  qp.matchOnDescription = true;
+  const current = w.fields['System.Parent'];
+  const remove = current ? [{ label: `$(close) ${t('Remove parent')}`, description: `#${current}`, id: null, alwaysShow: true }] : [];
+  let seq = 0;
+  const load = async (text: string) => {
+    const mine = ++seq;
+    const id = Number(text.replace(/^#/, ''));
+    const where = Number.isInteger(id) && id > 0 ? `[System.Id] = ${id}`
+      : text ? `[System.Title] CONTAINS ${wiqlString(text)} AND [System.State] <> 'Removed'`
+      : `[System.WorkItemType] <> ${wiqlString(w.fields['System.WorkItemType'])} AND [System.AreaPath] UNDER ${wiqlString(w.fields['System.AreaPath'] ?? project(w))}`
+        + " AND [System.State] NOT IN ('Closed', 'Done', 'Removed')";
+    qp.busy = true;
+    try {
+      const items = await searchItems(w.org, project(w), `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND [System.Id] <> ${w.id} AND ${where} ORDER BY [System.ChangedDate] DESC`);
+      if (mine !== seq) return;
+      qp.items = [...remove, ...items.map(i => ({
+        label: `#${i.id} ${i.fields['System.Title']}`, description: [i.fields['System.WorkItemType'], i.fields['System.State'], i.id === current ? t('current') : ''].filter(Boolean).join(' · '),
+        id: i.id, alwaysShow: !!text,
+      }))];
+    } catch (e) {
+      if (mine === seq) qp.items = [...remove, { label: (e as Error).message, id: -1 }];
+    } finally {
+      if (mine === seq) qp.busy = false;
+    }
+  };
+  // ponytail: 300 ms debounce, one query per pause; cancel in-flight requests if typing feels laggy.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  qp.onDidChangeValue(v => { clearTimeout(timer); timer = setTimeout(() => void load(v.trim()), 300); });
+  void load('');
+  const picked = await new Promise<number | null | undefined>(resolve => {
+    qp.onDidAccept(() => { const id = qp.selectedItems[0]?.id; if (id !== -1) { resolve(id); qp.hide(); } });
+    qp.onDidHide(() => resolve(undefined));
+    qp.show();
+  });
+  clearTimeout(timer);
+  qp.dispose();
+  return picked;
+}
+
 const askTitle = (prompt: string) =>
   vscode.window.showInputBox({ prompt, validateInput: v => (v.trim() ? undefined : t('The title cannot be empty')) });
 
 // Each edit resolves to something truthy when it changed the item, so the caller knows to refresh.
 export function edits(scope: ScopeStore, editorFs: WorkItemEditorFs): Record<string, (w: WorkItem) => Promise<unknown>> {
-  const project = (w: WorkItem) => w.fields['System.TeamProject'];
   return {
-    // Several board columns can share a state, so on the board the column is what the user means by "state".
     async setState(w) {
-      const type = w.fields['System.WorkItemType'];
-      const board = await boardFor(w.org, project(w), await teamFor(scope, w.org, project(w)), type);
-      if (board) {
-        const current = columnOf(board, (await getWorkItemFull(w)).fields as unknown as Record<string, unknown>);
-        const columns = board.columns.filter(c => c.stateMappings[type])
-          .map(c => ({ label: c.name, description: c.stateMappings[type], value: c }));
-        const col = await choose(columns, columns.find(c => c.label === current)?.value, t('Board column ({0})', board.name));
-        return col && col.name !== current
-          && update(w, { [board.fields.columnField.referenceName]: col.name, 'System.State': col.stateMappings[type] });
-      }
       const states = listStates(w).then(ss => ss.map(value => ({ label: value, value })));
       const state = await choose(states, w.fields['System.State'], t('State'));
       return state && state !== w.fields['System.State'] && update(w, { 'System.State': state });
+    },
+    // Several columns can share a state: moving to a column sets both.
+    async setColumn(w) {
+      const type = w.fields['System.WorkItemType'];
+      const board = await boardFor(w.org, project(w), await teamFor(scope, w.org, project(w)), type);
+      if (!board) return void vscode.window.showInformationMessage(t('#{0} is not on any board of the team', w.id));
+      const current = columnOf(board, (await getWorkItemFull(w)).fields as unknown as Record<string, unknown>);
+      const columns = board.columns.filter(c => c.stateMappings[type])
+        .map(c => ({ label: c.name, description: c.stateMappings[type], value: c }));
+      const col = await choose(columns, columns.find(c => c.label === current)?.value, t('Board column ({0})', board.name));
+      return col && col.name !== current
+        && update(w, { [board.fields.columnField.referenceName]: col.name, 'System.State': col.stateMappings[type] });
     },
     async setTitle(w) {
       const title = await vscode.window.showInputBox({ value: w.fields['System.Title'], prompt: t('Title'), validateInput: v => (v.trim() ? undefined : t('The title cannot be empty')) });
@@ -120,6 +166,10 @@ export function edits(scope: ScopeStore, editorFs: WorkItemEditorFs): Record<str
     async comment(w) {
       await vscode.window.showTextDocument(editorFs.openComment(w), { preview: false });
       vscode.window.setStatusBarMessage(t('Write your comment in Markdown and save (Ctrl/Cmd+S) to post it'), 6000);
+    },
+    async setParent(w) {
+      const id = await pickParent(w);
+      return id !== undefined && id !== (w.fields['System.Parent'] ?? null) && setParent(w, id ?? undefined);
     },
     async addChild(parent) {
       const type = await pickType(parent.org, project(parent));

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { allowLogin, webUrl, WorkItem } from './api';
+import { allowLogin, FullWorkItem, webUrl, WorkItem } from './api';
 import { SCHEME, WorkItemEditorFs } from './editorFs';
 import { createInScope, edits } from './edits';
 import { copyForAi, registerMcp } from './ai';
@@ -32,9 +32,8 @@ export function activate(ctx: vscode.ExtensionContext) {
   };
   const command = (id: string, fn: (...a: any[]) => unknown) => vscode.commands.registerCommand(`board_azr_devops.${id}`, safe(fn));
 
-  const afterChange = async (w: WorkItem) => {
-    await model.refresh();
-    if (shownId() === w.id) await preview(w);
+  const afterChange = async (w: WorkItem, latest?: unknown) => {
+    await Promise.all([model.refresh(), shownId() === w.id && preview(w, latest as FullWorkItem | undefined)]);
   };
 
   const present = () => {
@@ -44,10 +43,10 @@ export function activate(ctx: vscode.ExtensionContext) {
     view.title = mode === 'mine' ? t('Assigned to me') : team ?? t('Team');
     view.description = model.loaded ? [
       String(model.visible.length),
-      filters ? t('{0} filters', filters) : '',
+      filters ? (filters === 1 ? t('1 filter') : t('{0} filters', filters)) : '',
       mode === 'all' && model.filters.currentSprint ? t('current sprint') : '',
     ].filter(Boolean).join(' · ') : '';
-    view.badge = model.mine.length ? { value: model.mine.length, tooltip: t('{0} open work items assigned to you', model.mine.length) } : undefined;
+    view.badge = model.mine.length ? { value: model.mine.length, tooltip: model.mine.length === 1 ? t('1 open work item assigned to you') : t('{0} open work items assigned to you', model.mine.length) } : undefined;
     const set = (key: string, value: unknown) => vscode.commands.executeCommand('setContext', `board_azr_devops.${key}`, value);
     void set('mode', mode);
     void set('noOrg', !org);
@@ -115,8 +114,9 @@ export function activate(ctx: vscode.ExtensionContext) {
       await preview(created);
     }),
     ...Object.entries(edits(scope, editorFs)).map(([name, fn]) => command(name, async (w: WorkItem) => {
-      if (!(await fn(w))) return;
-      await afterChange(w);
+      const result = await fn(w);
+      if (!result) return;
+      await afterChange(w, result);
     })),
     vscode.workspace.registerFileSystemProvider(SCHEME, editorFs, { isCaseSensitive: true }),
     editorFs.onDidSave(w => afterChange(w)),

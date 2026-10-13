@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { addComment, Commit, getComments, getCommit, getUpdates, getPullRequest, getWorkItemFull, isMarkdown, PullRequest, prUrl, stateColors, typeColors, webUrl, WorkItem } from './api';
+import { addComment, Commit, FullWorkItem, getComments, getCommit, getUpdates, getPullRequest, getWorkItemFull, isMarkdown, PullRequest, prUrl, stateColors, typeColors, webUrl, WorkItem } from './api';
 import { parseArtifactLinks } from './gitText';
 import { historyEntries, statePath, WorkItemUpdate } from './historyText';
 import { renderMarkdown } from './editorFs';
@@ -8,7 +8,7 @@ import { esc } from './text';
 const t = vscode.l10n.t;
 // Actions that don't edit a field; fields are edited by clicking them.
 const ACTIONS: [string, string][] = [['startWork', 'Start working'], ['copyForAi', 'Copy for AI'], ['addChild', 'Add child']];
-const EDIT_COMMANDS = ['setState', 'setTitle', 'setPriority', 'setTags', 'assign', 'setIteration', 'editDescription', ...ACTIONS.map(([c]) => c)]
+const EDIT_COMMANDS = ['setState', 'setColumn', 'setTitle', 'setPriority', 'setTags', 'assign', 'setIteration', 'setParent', 'editDescription', ...ACTIONS.map(([c]) => c)]
   .map(c => `board_azr_devops.${c}`);
 
 // Command URI args go in the link; drop the long text fields so the URL stays small.
@@ -44,6 +44,9 @@ td{padding:2px 0}
 header{margin:16px 0 0;padding-left:12px;border-left:4px solid var(--type,var(--vscode-panel-border))}
 .kind{display:flex;gap:10px;align-items:center;color:var(--vscode-descriptionForeground)}
 .kind b{color:var(--vscode-foreground);font-weight:600}
+.kind .lbl{font-size:.85em;margin-right:-6px}
+.kind .edit{color:var(--vscode-foreground)}
+.sep{width:1px;align-self:stretch;margin:3px 2px;background:var(--vscode-panel-border)}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;background:var(--dot,var(--vscode-descriptionForeground))}
 .bar{margin:0}
 .bar a{margin-right:16px;white-space:nowrap;line-height:1.9}
@@ -125,8 +128,8 @@ function historyHtml(updates: WorkItemUpdate[]) {
     const changes = e.changes.map(c =>
       `<li>${esc(fieldLabel(c.field))}: ${c.from ? `<span class="old">${esc(c.from)}</span> → ` : ''}${c.to ? esc(c.to) : esc(t('(none)'))}</li>`);
     if (e.created) changes.push(`<li>${esc(t('Created'))}</li>`);
-    if (e.linksAdded) changes.push(`<li>${esc(t('{0} links added', e.linksAdded))}</li>`);
-    if (e.linksRemoved) changes.push(`<li>${esc(t('{0} links removed', e.linksRemoved))}</li>`);
+    if (e.linksAdded) changes.push(`<li>${esc(e.linksAdded === 1 ? t('1 link added') : t('{0} links added', e.linksAdded))}</li>`);
+    if (e.linksRemoved) changes.push(`<li>${esc(e.linksRemoved === 1 ? t('1 link removed') : t('{0} links removed', e.linksRemoved))}</li>`);
     return `<li><b>${esc(e.by)}</b> <span class="who">· ${esc(date(e.date))}</span><ul>${changes.join('')}</ul></li>`;
   }).join('');
   return `${path ? `<div class="path">${path}</div>` : ''}<ul class="tl">${entries}</ul>`;
@@ -176,7 +179,8 @@ function ensurePanel() {
   return panel;
 }
 
-export async function preview(w: WorkItem) {
+/** `latest` is an edit's PATCH response: used if newer than the GET, which can lag right after a write. */
+export async function preview(w: WorkItem, latest?: FullWorkItem) {
   const p = ensurePanel();
   // Opening another item shows a placeholder at once; re-rendering the same one keeps the old page until the new is ready.
   const switching = shown?.id !== w.id;
@@ -187,19 +191,20 @@ export async function preview(w: WorkItem) {
     p.reveal();
   }
   try {
-    await render(p, w);
+    await render(p, w, latest);
   } catch (e) {
     if (switching) p.webview.html = page(`<p class="err">${esc((e as Error).message)}</p>`, w.id);
     throw e;
   }
 }
 
-async function render(p: vscode.WebviewPanel, w: WorkItem) {
-  const fullP = getWorkItemFull(w);
+async function render(p: vscode.WebviewPanel, w: WorkItem, latest?: FullWorkItem) {
+  const fullP = getWorkItemFull(w).then(x => (latest?.id === x.id && latest.rev > x.rev ? { ...x, rev: latest.rev, fields: latest.fields } : x));
   const none = () => ({} as Record<string, string>);
-  const [full, comments, updates, dev, types, states] = await Promise.all([
+  const parentP = fullP.then(x => x.fields['System.Parent'] ? getWorkItemFull({ org: w.org, id: x.fields['System.Parent'] }).catch(() => undefined) : undefined);
+  const [full, comments, updates, dev, types, states, parent] = await Promise.all([
     fullP, getComments(w), getUpdates(w), fullP.then(x => linkedDev(w.org, x.relations)),
-    typeColors(w.org, w.fields['System.TeamProject']).catch(none), stateColors(w).catch(none),
+    typeColors(w.org, w.fields['System.TeamProject']).catch(none), stateColors(w).catch(none), parentP,
   ]);
   const f = full.fields;
   // Markdown fields come back as raw Markdown; render them like the HTML ones.
@@ -213,6 +218,8 @@ async function render(p: vscode.WebviewPanel, w: WorkItem) {
   p.title = `#${w.id}`;
 
   const type = f['System.WorkItemType'], state = f['System.State'];
+  // One column field per team board the item is on.
+  const column = [...new Set(Object.entries(f).filter(([k, v]) => k.endsWith('_Kanban.Column') && v).map(([, v]) => String(v)))].join(' · ');
   const color = (c?: string) => (c && /^#[0-9a-f]{6}$/i.test(c) ? c : '');
   const placeholder = (s: string) => `<span class="none">${esc(s)}</span>`;
   const tags = f['System.Tags']?.split(';').map(s => s.trim()).filter(Boolean) ?? [];
@@ -220,18 +227,19 @@ async function render(p: vscode.WebviewPanel, w: WorkItem) {
     [t('Assigned to'), 'assign', f['System.AssignedTo']?.displayName, t('Unassigned')],
     [t('Iteration'), 'setIteration', f['System.IterationPath'], t('No iteration')],
     [t('Priority'), 'setPriority', f['Microsoft.VSTS.Common.Priority']?.toString(), t('No priority')],
+    [t('Parent'), 'setParent', f['System.Parent'] && `#${f['System.Parent']} ${parent?.fields['System.Title'] ?? ''}`.trim(), t('No parent')],
   ] as const).map(([label, cmd, v, empty]) => `<dt>${esc(label)}</dt><dd>${editable(cmd, fresh, v ? esc(v) : placeholder(empty), label)}</dd>`).join('')
     + `<dt>${esc(t('Tags'))}</dt><dd>${editable('setTags', fresh, tags.map(s => `<span class="chip">${esc(s)}</span>`).join('') || placeholder(t('No tags')), t('Tags'))}</dd>`
     + (f['System.AreaPath'] ? `<dt>${esc(t('Area'))}</dt><dd>${esc(f['System.AreaPath'])}</dd>` : '');
 
   const section = (title: string, html?: string) => html ? `<h2>${esc(title)}</h2><div class="md">${html}</div>` : '';
   const commentsHtml = [...comments].sort((a, b) => b.createdDate.localeCompare(a.createdDate)).map(c =>
-    `<div class="c"><b>${esc(c.createdBy?.displayName)}</b> <span class="who">· ${esc(new Date(c.createdDate).toLocaleString())}</span><div class="md">${c.renderedText ?? c.text}</div></div>`).join('');
+    `<div class="c"><b>${esc(c.createdBy?.displayName)}</b> <span class="who">· ${esc(new Date(c.createdDate).toLocaleString())}</span><div class="md">${c.renderedText || c.text}</div></div>`).join('');
   const tab = (id: string, label: string) => `<button role="tab" data-tab="${id}">${esc(label)}</button>`;
 
   p.webview.html = page(`
 <header style="--type:${color(types[type]) || 'var(--vscode-panel-border)'}">
-<div class="kind"><b>${esc(type)}</b><span>#${w.id}</span>${editable('setState', fresh, `<span class="dot" style="--dot:${color(states[state]) || 'var(--vscode-descriptionForeground)'}"></span>${esc(state)}`, t('Change state'))}</div>
+<div class="kind"><b>${esc(type)}</b><span>#${w.id}</span><span class="sep"></span><span class="lbl">${esc(t('State'))}</span>${editable('setState', fresh, `<span class="dot" style="--dot:${color(states[state]) || 'var(--vscode-descriptionForeground)'}"></span>${esc(state)}`, t('Change state'))}${column ? `<span class="sep"></span><span class="lbl">${esc(t('Column'))}</span>${editable('setColumn', fresh, esc(column), t('Move to column'))}` : ''}</div>
 <h1>${editable('setTitle', fresh, esc(f['System.Title']), t('Edit title'))}</h1>
 <p class="bar">${ACTIONS.map(([c, label]) => cmdLink(c, fresh, t(label))).join('')}<a href="${esc(webUrl(w))}">${esc(t('Open in Azure DevOps'))}</a></p>
 </header>

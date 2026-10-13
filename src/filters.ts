@@ -38,7 +38,11 @@ export function filterOptions(items: WorkItem[]): Record<FilterKey, string[]> {
   return out;
 }
 
-export type GroupBy = 'state' | 'hierarchy' | 'assignee' | 'none';
+export type GroupBy = 'state' | 'column' | 'hierarchy' | 'assignee' | 'none';
+
+/** Board column from the `WEF_…_Kanban.Column` fields fetched with the list; '' when the item is on none of the team's boards. */
+export const boardColumnOf = (w: WorkItem) =>
+  String(Object.entries(w.fields).find(([k, v]) => k.endsWith('_Kanban.Column') && v)?.[1] ?? '');
 export interface Group { key: string; items: WorkItem[] }
 
 // ponytail: fixed order of the default process states; unknown custom states sort alphabetically after them.
@@ -46,14 +50,16 @@ export interface Group { key: string; items: WorkItem[] }
 const STATE_ORDER = ['New', 'Proposed', 'To Do', 'Approved', 'Committed', 'Active', 'In Progress', 'Doing', 'Resolved', 'Done', 'Closed', 'Removed'];
 const stateRank = (s: string) => { const i = STATE_ORDER.indexOf(s); return i < 0 ? STATE_ORDER.length : i; };
 
-export function groupItems(items: WorkItem[], by: 'state' | 'assignee'): Group[] {
+/** `columns` is the boards' column order, used when grouping by column. */
+export function groupItems(items: WorkItem[], by: 'state' | 'column' | 'assignee', columns: string[] = []): Group[] {
   const groups = new Map<string, WorkItem[]>();
   for (const w of items) {
-    const key = valuesOf(w, by === 'state' ? 'state' : 'assignee')[0];
+    const key = by === 'column' ? boardColumnOf(w) : valuesOf(w, by)[0];
     groups.set(key, [...(groups.get(key) ?? []), w]);
   }
-  const cmp = by === 'state'
-    ? (a: string, b: string) => stateRank(a) - stateRank(b) || a.localeCompare(b)
+  const columnRank = (c: string) => { const i = columns.indexOf(c); return c === '' ? Infinity : i < 0 ? columns.length : i; };
+  const cmp = by === 'state' ? (a: string, b: string) => stateRank(a) - stateRank(b) || a.localeCompare(b)
+    : by === 'column' ? (a: string, b: string) => columnRank(a) - columnRank(b) || a.localeCompare(b)
     : (a: string, b: string) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b));
   return [...groups.keys()].sort(cmp).map(key => ({ key, items: groups.get(key)! }));
 }

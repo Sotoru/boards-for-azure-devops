@@ -102,6 +102,6 @@ export class WorkItemTree implements vscode.TreeDataProvider<Node> {
       this.children = h.children;
       return h.roots;
     }
-    return groupItems(items, by).map(g => ({ group: g.key, items: g.items, label: g.key || (by === 'assignee' ? t('Unassigned') : '—') }));
+    return groupItems(items, by, this.model.columns).map(g => ({ group: g.key, items: g.items, label: g.key || (by === 'assignee' ? t('Unassigned') : '—') }));
   }
 }

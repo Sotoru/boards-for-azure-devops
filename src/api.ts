@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { Board } from './boardLogic';
+import { type Board, fullIterationPath } from './boardLogic';
 import type { TeamField } from './filters';
 import type { WorkItemUpdate } from './historyText';
 import { adoError, normalizeTenant, unique } from './text';
@@ -111,16 +111,16 @@ async function fetchByIds(org: string, ids: number[], extraFields: string[] = []
   return pages.flatMap(p => p.value.filter(Boolean).map(w => ({ org, id: w.id, fields: w.fields })));
 }
 
-async function wiql(org: string, scopePath: string, query: string, extraFields?: string[]) {
-  const { workItems } = await ado<{ workItems: { id: number }[] }>(org, `${scopePath}_apis/wit/wiql?api-version=7.1&$top=1000`, {
+async function wiql(org: string, scopePath: string, query: string, extraFields?: string[], top = 1000) {
+  const { workItems } = await ado<{ workItems: { id: number }[] }>(org, `${scopePath}_apis/wit/wiql?api-version=7.1&$top=${top}`, {
     method: 'POST',
     body: JSON.stringify({ query }),
   });
-  return fetchByIds(org, capped(workItems, 1000, `wiql:${org}/${scopePath}${query}`).map(w => w.id), extraFields);
+  return fetchByIds(org, (top === 1000 ? capped(workItems, 1000, `wiql:${org}/${scopePath}${query}`) : workItems).map(w => w.id), extraFields);
 }
 
-export const fetchMine = (org: string) =>
-  wiql(org, '', vscode.workspace.getConfiguration('board_azr_devops').get<string>('query')!);
+export const fetchMine = (org: string, extraFields?: string[]) =>
+  wiql(org, '', vscode.workspace.getConfiguration('board_azr_devops').get<string>('query')!, extraFields);
 
 const teamPath = (project: string, team: string) => `${encodeURIComponent(project)}/${encodeURIComponent(team)}/`;
 
@@ -134,9 +134,12 @@ export interface Iteration { name: string; path: string; attributes?: { timeFram
 export const listIterations = (org: string, project: string, team: string) =>
   ado<{ value: Iteration[] }>(org, `${teamPath(project, team)}_apis/work/teamsettings/iterations?api-version=7.1`).then(r => r.value);
 
+/** `backlogIteration` as a full iteration path; `bugsBehavior` is off, asRequirements or asTasks. */
+export const getTeamSettings = (org: string, project: string, team: string) =>
+  ado<{ backlogIteration?: { path?: string }; bugsBehavior?: string }>(org, `${teamPath(project, team)}_apis/work/teamsettings?api-version=7.1`)
+    .then(r => ({ backlogIteration: fullIterationPath(project, r.backlogIteration?.path), bugsBehavior: r.bugsBehavior }));
 export const getBacklogIteration = (org: string, project: string, team: string) =>
-  ado<{ backlogIteration?: { name: string; path?: string } }>(org, `${teamPath(project, team)}_apis/work/teamsettings?api-version=7.1`)
-    .then(r => r.backlogIteration?.path || r.backlogIteration?.name);
+  getTeamSettings(org, project, team).then(s => s.backlogIteration);
 
 export const listMembers = (org: string, project: string, team: string) =>
   ado<{ value: { identity: { displayName: string; uniqueName: string } }[] }>(
@@ -159,14 +162,15 @@ function workItemTypes(org: string, project: string) {
   return typeCache.get(key)!;
 }
 
+const categoryTypes = (org: string, project: string, category: string) =>
+  ado<{ value: { referenceName: string; workItemTypes: { name: string }[] }[] }>(org, `${encodeURIComponent(project)}/_apis/wit/workitemtypecategories?api-version=7.1`)
+    .then(r => r.value.find(c => c.referenceName === category)?.workItemTypes.map(t => t.name) ?? []);
+export const bugTypes = (org: string, project: string) => categoryTypes(org, project, 'Microsoft.BugCategory');
+
 /** Work item types offered for creation: hidden ones (test cases, code reviews, ...) are left out. */
 export async function listTypes(org: string, project: string) {
-  const p = encodeURIComponent(project);
-  const [types, cats] = await Promise.all([
-    workItemTypes(org, project),
-    ado<{ value: { referenceName: string; workItemTypes: { name: string }[] }[] }>(org, `${p}/_apis/wit/workitemtypecategories?api-version=7.1`),
-  ]);
-  const hidden = new Set(cats.value.find(c => c.referenceName === 'Microsoft.HiddenCategory')?.workItemTypes.map(t => t.name));
+  const [types, hiddenTypes] = await Promise.all([workItemTypes(org, project), categoryTypes(org, project, 'Microsoft.HiddenCategory')]);
+  const hidden = new Set(hiddenTypes);
   return types.filter(t => !t.isDisabled && !hidden.has(t.name)).map(t => t.name).sort();
 }
 
@@ -178,12 +182,29 @@ const fieldOps = (fields: FieldValues): Patch[] =>
 const patchInit = (ops: Patch[]): RequestInit =>
   ({ method: 'PATCH', headers: { 'Content-Type': 'application/json-patch+json' }, body: JSON.stringify(ops) });
 
+/** First `top` results of a project-scoped WIQL query, for pickers. */
+export const searchItems = (org: string, project: string, query: string, top = 50) => wiql(org, `${encodeURIComponent(project)}/`, query, undefined, top);
+
+const itemUrl = (org: string, id: number) => `https://dev.azure.com/${encodeURIComponent(org)}/_apis/wit/workItems/${id}`;
+
+/** Replaces the parent link (none when `parentId` is undefined). The rev test makes a concurrent link change fail instead of removing the wrong relation. */
+export async function setParent(w: WorkItem, parentId: number | undefined) {
+  const { rev, relations = [] } = await getWorkItemFull(w);
+  const i = relations.findIndex(r => r.rel === 'System.LinkTypes.Hierarchy-Reverse');
+  const ops: Patch[] = [
+    { op: 'test', path: '/rev', value: rev },
+    ...(i >= 0 ? [{ op: 'remove', path: `/relations/${i}` }] : []),
+    ...(parentId ? [{ op: 'add', path: '/relations/-', value: { rel: 'System.LinkTypes.Hierarchy-Reverse', url: itemUrl(w.org, parentId) } }] : []),
+  ];
+  return ado<FullWorkItem>(w.org, `_apis/wit/workitems/${w.id}?api-version=7.1`, patchInit(ops));
+}
+
 export async function createWorkItem(org: string, project: string, type: string, fields: FieldValues, parentId?: number) {
   const ops = fieldOps(fields);
   if (parentId) {
     ops.push({ op: 'add', path: '/relations/-', value: {
       rel: 'System.LinkTypes.Hierarchy-Reverse',
-      url: `https://dev.azure.com/${encodeURIComponent(org)}/_apis/wit/workItems/${parentId}`,
+      url: itemUrl(org, parentId),
     } });
   }
   const r = await ado<{ id: number; fields: Fields }>(org, `${encodeURIComponent(project)}/_apis/wit/workitems/$${encodeURIComponent(type)}?api-version=7.1`,
@@ -223,7 +244,7 @@ export const typeColors = (org: string, project: string) =>
   workItemTypes(org, project).then(ts => Object.fromEntries(ts.map(t => [t.name, t.color ? `#${t.color.slice(-6)}` : ''])));
 
 export interface FullWorkItem {
-  rev: number; fields: Fields; multilineFieldsFormat?: Record<string, string>; relations?: { rel: string; url: string }[];
+  id: number; rev: number; fields: Fields; multilineFieldsFormat?: Record<string, string>; relations?: { rel: string; url: string }[];
 }
 export const getWorkItemFull = (w: Pick<WorkItem, 'org' | 'id'>) =>
   ado<FullWorkItem>(w.org, `_apis/wit/workitems/${w.id}?$expand=relations&api-version=7.1`);

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { type Board, boardQuery, boardTypes, columnOf, initials, targetState } from '../src/boardLogic.ts';
+import { type Board, boardQuery, boardTypes, columnOf, fullIterationPath, initials, laneNames, laneOf, targetState } from '../src/boardLogic.ts';
 
 const board: Board = {
   id: 'b1',
@@ -44,4 +44,28 @@ test('initials', () => {
   assert.equal(initials('Alice Smith'), 'AS');
   assert.equal(initials('alice.smith@contoso.com'), 'AS');
   assert.equal(initials(undefined), '');
+});
+
+test('laneOf: named lane, empty or unknown falls back to the default lane', () => {
+  const laned: Board = { ...board, rows: [{ id: '0', name: null }, { id: '1', name: 'Expedite' }], fields: { ...board.fields, rowField: { referenceName: 'WEF_X_Kanban.Lane' } } };
+  assert.deepEqual(laneNames(laned), ['', 'Expedite']);
+  assert.deepEqual(laneNames(board), ['']);
+  assert.equal(laneOf(laned, { 'WEF_X_Kanban.Lane': 'Expedite' }), 'Expedite');
+  assert.equal(laneOf(laned, { 'WEF_X_Kanban.Lane': 'Gone' }), '');
+  assert.equal(laneOf(laned, {}), '');
+  assert.equal(laneOf(board, { 'WEF_X_Kanban.Lane': 'Expedite' }), '');
+});
+
+test('fullIterationPath adds the project to team settings paths', () => {
+  assert.equal(fullIterationPath('Fabrikam', ''), 'Fabrikam');
+  assert.equal(fullIterationPath('Fabrikam', undefined), 'Fabrikam');
+  assert.equal(fullIterationPath('Fabrikam', '\\Release 1'), 'Fabrikam\\Release 1');
+  assert.equal(fullIterationPath('Fabrikam', 'Release 1'), 'Fabrikam\\Release 1');
+  assert.equal(fullIterationPath('Fabrikam', 'Fabrikam\\Release 1'), 'Fabrikam\\Release 1');
+});
+
+test('boardQuery: backlog iteration and hidden bug types', () => {
+  const q = boardQuery({ field: 'System.AreaPath', values: [] }, board, false, { backlogIteration: "Fabrikam\\O'Neil", hiddenTypes: ['Bug'] });
+  assert.match(q, /\[System\.WorkItemType\] IN \('User Story'\)/);
+  assert.match(q, /\[System\.IterationPath\] UNDER 'Fabrikam\\O''Neil'/);
 });

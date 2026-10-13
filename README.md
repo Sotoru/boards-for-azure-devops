@@ -14,7 +14,7 @@ Browse and edit Azure DevOps work items without leaving VS Code: a sidebar with 
 
 - Toggle between work items assigned to you and all work items of the team (current sprint by default).
 - Filter by state, type, assignee, iteration, tags and priority; filters are remembered per team.
-- Group by state, hierarchy (parent → children), assignee, or not at all.
+- Group by state, board column, hierarchy (parent → children), assignee, or not at all.
 - Expand a work item for a quick look (ID, title, priority, tags, description); every value can be copied.
 - Saved queries (My Queries, Shared Queries) in their own section: expanding a query runs it.
 - Auto-refresh while the window is focused, a badge with your open items, a notification on new assignments.
@@ -35,8 +35,10 @@ Browse and edit Azure DevOps work items without leaving VS Code: a sidebar with 
 
 ### Kanban board
 
-- The team's real board columns with WIP limits, in an editor tab.
-- Drag & drop (or Alt+←/→) to move cards; filters are shared with the sidebar.
+- The team's real board columns, swimlanes (collapsible) and WIP limits, in an editor tab. Same cards as Azure DevOps: items under the team's backlog iteration, bugs only when the team tracks them as requirements.
+- Drag & drop (or Alt+arrows) to move cards across columns and lanes; filters are shared with the sidebar.
+- Search (press `/`) by id, title, type, assignee or tag; presets: mine, unassigned, current sprint, hide done.
+- Each cell shows 4 cards; "Show more" adds 4 at a time.
 
 ### Git (Azure Repos)
 
@@ -46,8 +48,8 @@ Browse and edit Azure DevOps work items without leaving VS Code: a sidebar with 
 
 ### AI assistants
 
-- **Copilot / VS Code MCP clients:** the extension offers the official [Azure DevOps MCP server](https://github.com/microsoft/azure-devops-mcp) (`@azure-devops/mcp`) for the active organization, with its tenant. Disable with `board_azr_devops.registerMcp` if you configured it yourself.
-- **Copy for AI** (context menu or detail page) copies a work item as Markdown: fields, description, acceptance criteria, repro steps, comments.
+- **Copilot / VS Code MCP clients:** the extension offers the official [Azure DevOps MCP server](https://github.com/microsoft/azure-devops-mcp) (`@azure-devops/mcp`) for the active organization, with its tenant and the selected project and team as defaults, so "work on #123" needs no project name. Disable with `board_azr_devops.registerMcp` if you configured it yourself.
+- **Copy for AI** (context menu or detail page) copies a minimal prompt: title, description (or repro steps), the branch name to use and the `#id` to put in commits.
 - The work item id is the number in the branch name (`feature/123`), so an assistant with Git access and the MCP server can find and read the current item without extra setup.
 
 ## Getting started
