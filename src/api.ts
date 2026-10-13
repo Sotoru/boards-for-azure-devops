@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { Board } from './boardLogic';
 import type { TeamField } from './filters';
+import type { WorkItemUpdate } from './historyText';
 import { adoError, normalizeTenant, unique } from './text';
 import type { Comment, Fields, WorkItem } from './types';
 
@@ -232,6 +233,10 @@ export const isMarkdown = (full: FullWorkItem, field: keyof Fields) => full.mult
 // renderedText is the HTML of Markdown comments; plain HTML comments only have text.
 export const getComments = (w: WorkItem) =>
   ado<{ comments: Comment[] }>(w.org, `${proj(w)}/_apis/wit/workItems/${w.id}/comments?api-version=7.1-preview.4`).then(r => r.comments);
+
+// ponytail: first 200 updates (the API default page); add $skip paging if items with longer histories show up.
+export const getUpdates = (w: WorkItem) =>
+  ado<{ value: WorkItemUpdate[] }>(w.org, `${proj(w)}/_apis/wit/workItems/${w.id}/updates?api-version=7.1`).then(r => r.value);
 
 export const addComment = (w: WorkItem, html: string) =>
   ado(w.org, `${proj(w)}/_apis/wit/workItems/${w.id}/comments?api-version=7.1-preview.4`, {

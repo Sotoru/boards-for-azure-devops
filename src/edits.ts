@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import {
-  createWorkItem, defaultTeam, getBacklogIteration, getTeamField, getWorkItemFull, isMarkdown, listIterations, listMembers,
+  createWorkItem, defaultTeam, getBacklogIteration, getBoard, getTeamField, getWorkItemFull, isMarkdown, listBoards, listIterations, listMembers,
   listStates, listTypes, myIdentity, update, webUrl, WorkItem,
 } from './api';
+import { columnOf } from './boardLogic';
 import { editorUri, WorkItemEditorFs } from './editorFs';
 import { isComplexHtml, normalizeTags } from './markdown';
 import { ScopeStore } from './scope';
@@ -26,6 +27,14 @@ async function teamFor(scope: ScopeStore, org: string, project: string) {
   return team;
 }
 
+/** First board of the team that has a column for this work item type; none for types off the Kanban (e.g. tasks). */
+async function boardFor(org: string, project: string, team: string, type: string) {
+  for (const b of await listBoards(org, project, team)) {
+    const board = await getBoard(org, project, team, b.id);
+    if (board.columns.some(c => c.stateMappings[type])) return board;
+  }
+}
+
 async function pickType(org: string, project: string) {
   return choose(listTypes(org, project).then(ts => ts.map(value => ({ label: value, value }))), undefined, t('Work item type'));
 }
@@ -37,7 +46,18 @@ const askTitle = (prompt: string) =>
 export function edits(scope: ScopeStore, editorFs: WorkItemEditorFs): Record<string, (w: WorkItem) => Promise<unknown>> {
   const project = (w: WorkItem) => w.fields['System.TeamProject'];
   return {
+    // Several board columns can share a state, so on the board the column is what the user means by "state".
     async setState(w) {
+      const type = w.fields['System.WorkItemType'];
+      const board = await boardFor(w.org, project(w), await teamFor(scope, w.org, project(w)), type);
+      if (board) {
+        const current = columnOf(board, (await getWorkItemFull(w)).fields as unknown as Record<string, unknown>);
+        const columns = board.columns.filter(c => c.stateMappings[type])
+          .map(c => ({ label: c.name, description: c.stateMappings[type], value: c }));
+        const col = await choose(columns, columns.find(c => c.label === current)?.value, t('Board column ({0})', board.name));
+        return col && col.name !== current
+          && update(w, { [board.fields.columnField.referenceName]: col.name, 'System.State': col.stateMappings[type] });
+      }
       const states = listStates(w).then(ss => ss.map(value => ({ label: value, value })));
       const state = await choose(states, w.fields['System.State'], t('State'));
       return state && state !== w.fields['System.State'] && update(w, { 'System.State': state });
