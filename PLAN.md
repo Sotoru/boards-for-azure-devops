@@ -11,6 +11,7 @@
 - Filter (funnel icon): one multi-select QuickPick grouped by state, type, assignee, sprint (default: current), tags, priority. Client-side except sprint (re-queries). Remembered per team. Active filters summarized in the view description, with a clear button.
 - Text search: native tree type-to-filter.
 - Group by: state (default), hierarchy, assignee, none. Expanding an item shows its details; items with children (hierarchy) show a "Details" node first, then the children.
+- Saved queries in a separate view (collapsed by default): folders → queries; expanding a query runs it in the team's context. Tree and one-hop queries are shown flat.
 - Auto-refresh every 5 min while the window is focused, and on focus. Badge with my open items. Notification on new assignment (can be disabled).
 
 **Editing**

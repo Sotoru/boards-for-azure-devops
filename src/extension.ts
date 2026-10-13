@@ -9,6 +9,7 @@ import { clearFilters, pickFilters, pickGroupBy } from './filterPick';
 import { activeFilterCount } from './filters';
 import { Model } from './model';
 import { preview, shownId } from './preview';
+import { QueryTree } from './queries';
 import { ScopeStore } from './scope';
 import { Row, WorkItemTree } from './tree';
 
@@ -23,6 +24,8 @@ export function activate(ctx: vscode.ExtensionContext) {
   const tree = new WorkItemTree(model, () => git.active?.id);
   const board = new BoardPanel(ctx.extensionUri, ctx.globalState, model, () => git.active?.id);
   const view = vscode.window.createTreeView('board_azr_devops.items', { treeDataProvider: tree, showCollapseAll: true });
+  const queries = new QueryTree(model, () => git.active?.id);
+  const queryView = vscode.window.createTreeView('board_azr_devops.queries', { treeDataProvider: queries, showCollapseAll: true });
   const safe = <A extends unknown[]>(fn: (...a: A) => unknown) => (...args: A) => {
     allowLogin();
     return Promise.resolve().then(() => fn(...args)).catch(e => vscode.window.showErrorMessage(`Azure Boards: ${(e as Error).message}`));
@@ -77,8 +80,8 @@ export function activate(ctx: vscode.ExtensionContext) {
   const timer = setInterval(() => { if (vscode.window.state.focused && stale(minutes() * 60_000)) void model.refresh(); }, 30_000);
 
   ctx.subscriptions.push(
-    scope, view, git,
-    git.onDidChangeActive(() => tree.refresh()),
+    scope, view, queryView, git,
+    git.onDidChangeActive(() => { tree.refresh(); queries.refresh(); }),
     scope.onDidChange(() => git.update()),
     { dispose: () => clearInterval(timer) },
     model.onDidChange(present),

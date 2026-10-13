@@ -50,6 +50,11 @@
         {
           "id": "board_azr_devops.items",
           "name": "%view.items%"
+        },
+        {
+          "id": "board_azr_devops.queries",
+          "name": "%view.queries%",
+          "visibility": "collapsed"
         }
       ]
     },
@@ -367,6 +372,11 @@
           "command": "board_azr_devops.switchScope",
           "when": "view == board_azr_devops.items",
           "group": "9_scope"
+        },
+        {
+          "command": "board_azr_devops.refresh",
+          "when": "view == board_azr_devops.queries",
+          "group": "navigation@1"
         }
       ],
       "board_azr_devops.editField": [

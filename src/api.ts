@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { Board } from './boardLogic';
 import type { TeamField } from './filters';
-import { normalizeTenant, unique } from './text';
+import { adoError, normalizeTenant, unique } from './text';
 import type { Comment, Fields, WorkItem } from './types';
 
 // Azure DevOps resource ID: lets VS Code's built-in Microsoft login issue the token, no PAT to store.
@@ -34,14 +34,32 @@ export function tenantOf(org: string) {
   return tenants.get(org)!;
 }
 
-async function request<T>(url: string, tenant: string | undefined, init: RequestInit = {}): Promise<T> {
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+async function request<T>(url: string, tenant: string | undefined, init: RequestInit = {}, retried = false): Promise<T> {
   const { accessToken } = await session(tenant);
   const res = await fetch(url, {
     ...init,
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', ...init.headers },
   });
-  if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 300)}`);
+  // Azure DevOps throttles with 429 (and 503 under load) and says how long to wait in Retry-After.
+  // ponytail: one retry, capped at 30s; a backoff loop if users still hit throttling.
+  if ((res.status === 429 || res.status === 503) && !retried) {
+    await sleep(Math.min(Number(res.headers.get('retry-after')) || 5, 30) * 1000);
+    return request<T>(url, tenant, init, true);
+  }
+  if (!res.ok) throw new Error(adoError(res.status, await res.text()));
   return res.json() as Promise<T>;
+}
+
+// Lists are capped server-side; say so instead of silently showing a partial list. Once per list per session, polling repeats them.
+const warned = new Set<string>();
+function capped<T>(list: T[], limit: number, key: string): T[] {
+  if (list.length >= limit && !warned.has(key)) {
+    warned.add(key);
+    void vscode.window.showWarningMessage(vscode.l10n.t('Azure Boards: only the first {0} results are shown. Narrow the query or filters.', limit));
+  }
+  return list;
 }
 
 export async function ado<T = any>(org: string, path: string, init?: RequestInit): Promise<T> {
@@ -71,11 +89,12 @@ export async function listOrgs(): Promise<string[]> {
 }
 
 export const listProjects = (org: string) =>
-  ado<{ value: { name: string }[] }>(org, '_apis/projects?api-version=7.1&$top=500').then(r => r.value.map(p => p.name));
+  ado<{ value: { name: string }[] }>(org, '_apis/projects?api-version=7.1&$top=500')
+    .then(r => capped(r.value, 500, `projects:${org}`).map(p => p.name));
 
 export const listTeams = (org: string, project: string) =>
   ado<{ value: { name: string }[] }>(org, `_apis/projects/${encodeURIComponent(project)}/teams?api-version=7.1&$top=500`)
-    .then(r => r.value.map(t => t.name));
+    .then(r => capped(r.value, 500, `teams:${org}/${project}`).map(t => t.name));
 
 const LIST_FIELDS = [
   'System.Title', 'System.State', 'System.WorkItemType', 'System.TeamProject', 'System.AssignedTo', 'System.IterationPath',
@@ -96,7 +115,7 @@ async function wiql(org: string, scopePath: string, query: string, extraFields?:
     method: 'POST',
     body: JSON.stringify({ query }),
   });
-  return fetchByIds(org, workItems.map(w => w.id), extraFields);
+  return fetchByIds(org, capped(workItems, 1000, `wiql:${org}/${scopePath}${query}`).map(w => w.id), extraFields);
 }
 
 export const fetchMine = (org: string) =>
@@ -126,15 +145,28 @@ export const listMembers = (org: string, project: string, team: string) =>
 export const defaultTeam = (org: string, project: string) =>
   ado<{ defaultTeam?: { name: string } }>(org, `_apis/projects/${encodeURIComponent(project)}?api-version=7.1`).then(r => r.defaultTeam?.name);
 
+// Types rarely change and the board asks for them on every refresh: cached for the session, dropped on failure so it can retry.
+const typeCache = new Map<string, Promise<{ name: string; color?: string; isDisabled?: boolean }[]>>();
+function workItemTypes(org: string, project: string) {
+  const key = `${org}/${project}`;
+  if (!typeCache.has(key)) {
+    const p = ado<{ value: { name: string; color?: string; isDisabled?: boolean }[] }>(org, `${encodeURIComponent(project)}/_apis/wit/workitemtypes?api-version=7.1`)
+      .then(r => r.value);
+    p.catch(() => typeCache.delete(key));
+    typeCache.set(key, p);
+  }
+  return typeCache.get(key)!;
+}
+
 /** Work item types offered for creation: hidden ones (test cases, code reviews, ...) are left out. */
 export async function listTypes(org: string, project: string) {
   const p = encodeURIComponent(project);
   const [types, cats] = await Promise.all([
-    ado<{ value: { name: string; isDisabled?: boolean }[] }>(org, `${p}/_apis/wit/workitemtypes?api-version=7.1`),
+    workItemTypes(org, project),
     ado<{ value: { referenceName: string; workItemTypes: { name: string }[] }[] }>(org, `${p}/_apis/wit/workitemtypecategories?api-version=7.1`),
   ]);
   const hidden = new Set(cats.value.find(c => c.referenceName === 'Microsoft.HiddenCategory')?.workItemTypes.map(t => t.name));
-  return types.value.filter(t => !t.isDisabled && !hidden.has(t.name)).map(t => t.name).sort();
+  return types.filter(t => !t.isDisabled && !hidden.has(t.name)).map(t => t.name).sort();
 }
 
 type Patch = { op: string; path: string; value?: unknown };
@@ -161,6 +193,24 @@ export async function createWorkItem(org: string, project: string, type: string,
 export const fetchByTeamQuery = (org: string, project: string, team: string, query: string, extraFields?: string[]) =>
   wiql(org, teamPath(project, team), query, extraFields);
 
+export interface SavedQuery { id: string; name: string; isFolder?: boolean; hasChildren?: boolean; children?: SavedQuery[] }
+/** Root folders (My Queries, Shared Queries) with their direct children, or the children of one folder. */
+export const listQueries = (org: string, project: string, folderId?: string) => {
+  const p = `${encodeURIComponent(project)}/_apis/wit/queries`;
+  return folderId
+    ? ado<SavedQuery>(org, `${p}/${folderId}?$depth=1&api-version=7.1`).then(r => r.children ?? [])
+    : ado<{ value: SavedQuery[] }>(org, `${p}?$depth=1&api-version=7.1`).then(r => r.value);
+};
+
+// The team in the URL makes @CurrentIteration and @TeamAreas resolve. Tree and one-hop queries return links, shown flat.
+export async function runQuery(org: string, project: string, team: string | undefined, id: string) {
+  const scopePath = team ? teamPath(project, team) : `${encodeURIComponent(project)}/`;
+  const r = await ado<{ workItems?: { id: number }[]; workItemRelations?: { target?: { id: number } }[] }>(
+    org, `${scopePath}_apis/wit/wiql/${id}?api-version=7.1&$top=1000`);
+  const ids = r.workItems?.map(w => w.id) ?? [...new Set(r.workItemRelations?.flatMap(l => l.target ? [l.target.id] : []))];
+  return fetchByIds(org, capped(ids, 1000, `query:${org}/${id}`));
+}
+
 export const listBoards = (org: string, project: string, team: string) =>
   ado<{ value: { id: string; name: string }[] }>(org, `${teamPath(project, team)}_apis/work/boards?api-version=7.1`).then(r => r.value);
 
@@ -169,8 +219,7 @@ export const getBoard = (org: string, project: string, team: string, board: stri
 
 /** Type name → hex color as shown on Azure DevOps cards. */
 export const typeColors = (org: string, project: string) =>
-  ado<{ value: { name: string; color?: string }[] }>(org, `${encodeURIComponent(project)}/_apis/wit/workitemtypes?api-version=7.1`)
-    .then(r => Object.fromEntries(r.value.map(t => [t.name, t.color ? `#${t.color.slice(-6)}` : ''])));
+  workItemTypes(org, project).then(ts => Object.fromEntries(ts.map(t => [t.name, t.color ? `#${t.color.slice(-6)}` : ''])));
 
 export interface FullWorkItem {
   rev: number; fields: Fields; multilineFieldsFormat?: Record<string, string>; relations?: { rel: string; url: string }[];

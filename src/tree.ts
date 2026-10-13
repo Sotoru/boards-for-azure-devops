@@ -12,7 +12,7 @@ type DetailsNode = { details: WorkItem };
 type Node = WorkItem | GroupNode | DetailsNode | Row;
 const t = vscode.l10n.t;
 
-function row(icon: string, label: string, description?: string, extra: Partial<vscode.TreeItem> = {}): Row {
+export function row(icon: string, label: string, description?: string, extra: Partial<vscode.TreeItem> = {}): Row {
   return { row: Object.assign(new vscode.TreeItem(label), { iconPath: new vscode.ThemeIcon(icon), description }, extra) };
 }
 
@@ -24,7 +24,7 @@ function field(icon: string, label: string, value: string | undefined, shown = v
 
 const DESC_PREVIEW = 80;
 
-function detailRows(w: WorkItem): Row[] {
+export function detailRows(w: WorkItem): Row[] {
   const f = w.fields;
   const desc = plain(f['System.Description']);
   return [
@@ -41,6 +41,21 @@ function detailRows(w: WorkItem): Row[] {
 }
 
 const TYPE_ICONS: Record<string, string> = { Bug: 'bug', Task: 'tasklist', 'User Story': 'book', 'Product Backlog Item': 'book', Feature: 'star', Epic: 'rocket', Issue: 'issues' };
+
+/** contextValue `workItem` gives the row the work item context menu in any view. */
+export function workItemTreeItem(w: WorkItem, activeId: number | undefined): vscode.TreeItem {
+  const f = w.fields;
+  const item = new vscode.TreeItem(f['System.Title'], vscode.TreeItemCollapsibleState.Collapsed);
+  item.description = `${f['System.WorkItemType']} · ${f['System.State']}`;
+  item.tooltip = `${f['System.TeamProject']} · ${f['System.AssignedTo']?.displayName ?? t('Unassigned')}`;
+  const active = activeId === w.id;
+  item.iconPath = active
+    ? new vscode.ThemeIcon('target', new vscode.ThemeColor('charts.green'))
+    : new vscode.ThemeIcon(TYPE_ICONS[f['System.WorkItemType']] ?? 'circle-small');
+  if (active) item.description = `${t('current branch')} · ${item.description}`;
+  item.contextValue = 'workItem';
+  return item;
+}
 
 export class WorkItemTree implements vscode.TreeDataProvider<Node> {
   private readonly changed = new vscode.EventEmitter<void>();
@@ -61,17 +76,7 @@ export class WorkItemTree implements vscode.TreeDataProvider<Node> {
     if ('group' in n) {
       return Object.assign(new vscode.TreeItem(n.label, vscode.TreeItemCollapsibleState.Expanded), { description: String(n.items.length), id: `group:${n.group}` });
     }
-    const f = n.fields;
-    const item = new vscode.TreeItem(f['System.Title'], vscode.TreeItemCollapsibleState.Collapsed);
-    item.description = `${f['System.WorkItemType']} · ${f['System.State']}`;
-    item.tooltip = `${f['System.TeamProject']} · ${f['System.AssignedTo']?.displayName ?? t('Unassigned')}`;
-    const active = this.activeId() === n.id;
-    item.iconPath = active
-      ? new vscode.ThemeIcon('target', new vscode.ThemeColor('charts.green'))
-      : new vscode.ThemeIcon(TYPE_ICONS[f['System.WorkItemType']] ?? 'circle-small');
-    if (active) item.description = `${t('current branch')} · ${item.description}`;
-    item.contextValue = 'workItem';
-    return item;
+    return workItemTreeItem(n, this.activeId());
   }
 
   async getChildren(n?: Node): Promise<Node[]> {

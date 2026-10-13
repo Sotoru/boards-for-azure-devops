@@ -8,6 +8,7 @@ Browse and edit Azure DevOps work items from the VS Code sidebar. Not affiliated
 - Toggle between work items assigned to you and all work items of the team (current sprint by default).
 - Filter by state, type, assignee, iteration, tags and priority; filters are remembered per team.
 - Group by state, hierarchy (parent → children), assignee, or not at all.
+- Saved queries (My Queries, Shared Queries) of the project in their own section: expanding a query runs it.
 - Expand a work item for details; "Show all" opens a full view with comments.
 - Create work items (team area, current sprint) and child items.
 - Edit state, title, priority, tags, assignee (any team member) and sprint from the context menu or the full view.

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { esc, normalizeTenant, plain, unique } from '../src/text.ts';
+import { adoError, esc, normalizeTenant, plain, unique } from '../src/text.ts';
 
 test('esc escapes html', () => {
   assert.equal(esc('<a href="x">&</a>'), '&lt;a href=&quot;x&quot;&gt;&amp;&lt;/a&gt;');
@@ -20,4 +20,9 @@ test('normalizeTenant drops the empty MSA tenant', () => {
 
 test('unique dedupes case-insensitively and sorts', () => {
   assert.deepEqual(unique(['fabrikam', 'Contoso', 'contoso', '']), ['contoso', 'fabrikam']);
+});
+
+test('adoError prefers the json message', () => {
+  assert.equal(adoError(400, '{"$id":"1","message":"TF401320: Rule error for field Title."}'), 'TF401320: Rule error for field Title. (400)');
+  assert.equal(adoError(502, '<html>Bad gateway</html>'), '502 <html>Bad gateway</html>');
 });

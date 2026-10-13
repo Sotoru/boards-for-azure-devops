@@ -11,6 +11,7 @@
   "config.organizations": "Organizzazioni Azure DevOps aggiuntive (la parte dopo `dev.azure.com/`). Quelle dell'account con cui hai fatto login vengono trovate in automatico; aggiungi qui quelle di altri tenant.",
   "config.query": "Query WIQL per la vista \"Assegnati a me\"",
   "view.items": "Work item",
+  "view.queries": "Query salvate",
   "view.welcome.noOrg": "Nessuna organizzazione selezionata.\n[Scegli organizzazione](command:board_azr_devops.switchScope)",
   "view.welcome.noTeam": "Scegli progetto e team per vedere tutti i work item del team.\n[Scegli team](command:board_azr_devops.switchScope)",
   "view.welcome.emptyFiltered": "Nessun work item corrisponde ai filtri attivi.\n[Azzera filtri](command:board_azr_devops.clearFilters)",

@@ -17,3 +17,12 @@ export const normalizeTenant = (t: string | null | undefined) =>
 
 export const unique = (xs: string[]) =>
   [...new Map(xs.filter(Boolean).map(x => [x.toLowerCase(), x])).values()].sort((a, b) => a.localeCompare(b));
+
+/** Azure DevOps errors are JSON with a human `message`; anything else (proxies, HTML pages) is cut short. */
+export function adoError(status: number, body: string) {
+  try {
+    const { message } = JSON.parse(body) as { message?: string };
+    if (message) return `${message} (${status})`;
+  } catch { /* not JSON */ }
+  return `${status} ${body.slice(0, 300)}`;
+}

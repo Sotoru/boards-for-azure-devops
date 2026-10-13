@@ -13,6 +13,7 @@
   "config.organizations": "Extra Azure DevOps organizations (the part after `dev.azure.com/`). Organizations of the signed-in account are discovered automatically; add here the ones in other tenants.",
   "config.query": "WIQL query for the \"Assigned to me\" view",
   "view.items": "Work items",
+  "view.queries": "Saved queries",
   "view.welcome.noOrg": "No organization selected.\n[Choose organization](command:board_azr_devops.switchScope)",
   "view.welcome.noTeam": "Pick a project and team to see all of the team's work items.\n[Choose team](command:board_azr_devops.switchScope)",
   "view.welcome.emptyFiltered": "No work items match the active filters.\n[Clear filters](command:board_azr_devops.clearFilters)",
