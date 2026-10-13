@@ -30,13 +30,10 @@ export function detailRows(w: WorkItem): Row[] {
   return [
     field('symbol-number', t('ID'), String(w.id), `#${w.id}`),
     field('symbol-text', t('Title'), f['System.Title']),
-    field('circle-outline', t('State'), f['System.State']),
-    field('person', t('Assigned to'), f['System.AssignedTo']?.displayName),
-    field('calendar', t('Iteration'), f['System.IterationPath']),
     ...(f['Microsoft.VSTS.Common.Priority'] !== undefined ? [field('arrow-up', t('Priority'), String(f['Microsoft.VSTS.Common.Priority']))] : []),
     ...(f['System.Tags'] ? [field('tag', t('Tags'), f['System.Tags'])] : []),
     ...(desc ? [field('note', t('Description'), desc, desc.length > DESC_PREVIEW ? `${desc.slice(0, DESC_PREVIEW)}…` : desc, { tooltip: desc.slice(0, 1000) })] : []),
-    row('link-external', t('Show all'), undefined, { command: { command: 'board_azr_devops.preview', title: t('Show all'), arguments: [w] } }),
+    row('open-preview', t('Open details'), undefined, { command: { command: 'board_azr_devops.preview', title: t('Open details'), arguments: [w] } }),
   ];
 }
 

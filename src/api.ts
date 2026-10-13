@@ -246,8 +246,19 @@ export const addComment = (w: WorkItem, html: string) =>
 
 /** category is one of Proposed, InProgress, Resolved, Completed, Removed. */
 export const listStatesFull = (w: WorkItem) =>
-  ado<{ value: { name: string; category: string }[] }>(w.org, `${proj(w)}/_apis/wit/workitemtypes/${encodeURIComponent(w.fields['System.WorkItemType'])}/states?api-version=7.1`)
+  ado<{ value: { name: string; category: string; color?: string }[] }>(w.org, `${proj(w)}/_apis/wit/workitemtypes/${encodeURIComponent(w.fields['System.WorkItemType'])}/states?api-version=7.1`)
     .then(r => r.value);
+const stateCache = new Map<string, Promise<Record<string, string>>>();
+/** State name → hex color as shown on Azure DevOps, per project and type. */
+export function stateColors(w: WorkItem) {
+  const key = `${w.org}/${w.fields['System.TeamProject']}/${w.fields['System.WorkItemType']}`;
+  if (!stateCache.has(key)) {
+    const p = listStatesFull(w).then(ss => Object.fromEntries(ss.map(s => [s.name, s.color ? `#${s.color.slice(-6)}` : ''])));
+    p.catch(() => stateCache.delete(key));
+    stateCache.set(key, p);
+  }
+  return stateCache.get(key)!;
+}
 export const listStates = (w: WorkItem) => listStatesFull(w).then(ss => ss.map(s => s.name));
 
 export interface PullRequest {
