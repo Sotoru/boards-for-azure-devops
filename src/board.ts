@@ -37,9 +37,9 @@ export class BoardPanel {
     });
     const nonce = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
     const csp = `default-src 'none'; style-src ${this.panel.webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';`;
-    this.panel.webview.html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    this.panel.webview.html = `<!DOCTYPE html><html lang="${vscode.env.language}"><head><meta charset="utf-8"><title>${t('Board')}</title>
 <meta http-equiv="Content-Security-Policy" content="${csp}">
-<style>${CSS}</style></head><body><div id="root"><p class="message">${t('Loading…')}</p></div>
+<style>${CSS}</style></head><body><main id="root"><p class="message">${t('Loading…')}</p></main><div id="live" class="sr" role="status"></div>
 <script nonce="${nonce}" src="${this.panel.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'board.js'))}"></script></body></html>`;
     this.panel.webview.onDidReceiveMessage((m: FromWebview) => this.onMessage(m));
     this.panel.onDidDispose(() => { this.panel = undefined; });
@@ -87,7 +87,7 @@ export class BoardPanel {
         summary: [String(visible.length), n ? (n === 1 ? t('1 filter') : t('{0} filters', n)) : '', filters.currentSprint ? t('current sprint') : ''].filter(Boolean).join(' · '),
         boards,
         board: chosen.id,
-        columns: board.columns.map(c => ({ name: c.name, limit: c.itemLimit, accepts: Object.keys(c.stateMappings), done: c.columnType === 'outgoing' })),
+        columns: board.columns.map(c => ({ name: c.name, limit: c.itemLimit, accepts: Object.keys(c.stateMappings), done: c.columnType === 'outgoing', split: c.columnType === 'inProgress' })),
         currentSprint: filters.currentSprint,
         view: this.state.get<Partial<BoardView>>('boardView', {}),
         lanes: laneNames(board),
@@ -106,7 +106,7 @@ export class BoardPanel {
         })),
         labels: {
           filter: t('Filter…'), refresh: t('Refresh'), empty: t('No items'), unassigned: t('Unassigned'), board: t('Board'), defaultLane: t('Default lane'),
-          search: t('Search (/)'), mine: t('Mine'), sprint: t('Current sprint'), showMore: t('Show more'), hideDone: t('Hide done'), presets: t('Presets'),
+          search: t('Search (/)'), mine: t('Mine'), sprint: t('Current sprint'), showMore: t('Show more'), hideDone: t('Hide done'), presets: t('Presets'), moved: t('Moved to {0}'),
           moveHint: board.rows && board.rows.length > 1
             ? t('Drag to another column or lane, or Alt+arrows. Enter opens.') : t('Drag to another column, or Alt+←/→. Enter opens.'),
         },
@@ -167,8 +167,8 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 body.busy{cursor:progress}body.busy .board{opacity:.6}
 .bar{display:flex;align-items:center;gap:8px;padding:10px 0;position:sticky;top:0;background:var(--vscode-editor-background);z-index:1}
 .bar h1{font-size:1.15em;margin:0 8px 0 0;font-weight:600}
-.summary{opacity:.7;margin-left:4px}
-button.icon{background:none;color:var(--vscode-icon-foreground,var(--vscode-foreground));padding:3px;border-radius:5px;display:flex}
+.summary{color:var(--vscode-descriptionForeground);margin-left:4px}
+button.icon{background:none;border:none;color:var(--vscode-icon-foreground,var(--vscode-foreground));padding:3px;border-radius:5px;display:flex}
 button.icon:hover{background:var(--vscode-toolbar-hoverBackground)}
 button.icon svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
 body.busy button.icon svg{animation:spin 1s linear infinite}
@@ -178,9 +178,10 @@ input[type=search]{width:180px;font:inherit;padding:3px 6px;border-radius:2px;co
 input[type=search]::placeholder{color:var(--vscode-input-placeholderForeground)}
 input[type=search]:focus{outline:1px solid var(--vscode-focusBorder);outline-offset:-1px}
 .tools{display:flex;align-items:center;gap:8px;margin-left:auto}
-.more{background:none;color:var(--vscode-textLink-foreground);padding:2px 0;text-align:center}
+.more{background:none;border:none;color:var(--vscode-textLink-foreground);padding:2px 0;text-align:center}
 .more:hover{background:var(--vscode-list-hoverBackground)}
-button{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;padding:4px 10px;border-radius:2px;cursor:pointer;font:inherit}
+/* Badges and buttons get the theme's contrast border, which only high contrast themes set. */
+button{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:1px solid var(--vscode-button-border,transparent);padding:3px 9px;border-radius:2px;cursor:pointer;font:inherit}
 button:hover{background:var(--vscode-button-hoverBackground)}
 button.secondary{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}
 select{background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);padding:3px;font:inherit}
@@ -188,23 +189,26 @@ select{background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-
 button[aria-pressed=true]{outline:1px solid var(--vscode-focusBorder);outline-offset:-1px}
 .presets{display:flex;gap:4px}
 .colhead{display:flex;justify-content:space-between;padding:8px 10px;font-weight:600;background:var(--vscode-sideBar-background);border:1px solid var(--vscode-panel-border);border-radius:4px 4px 0 0}
-.count{opacity:.7;font-weight:normal}.count.over{color:var(--vscode-errorForeground);opacity:1;font-weight:600}
+/* Theme colors, not opacity: faded text drops below 4.5:1 in light themes. list.errorForeground is the error color meant for text on panels. */
+.count{color:var(--vscode-descriptionForeground);font-weight:normal}.count.over{color:var(--vscode-list-errorForeground,var(--vscode-errorForeground));font-weight:600}
 .lane{grid-column:1/-1;padding:10px 2px 4px;font-weight:600;border:none;border-bottom:1px solid var(--vscode-panel-border);border-radius:0;margin-bottom:6px;text-align:left;background:none;color:var(--vscode-foreground)}
 .lane:hover{background:var(--vscode-list-hoverBackground)}
 .cell{background:var(--vscode-sideBar-background);border:1px solid var(--vscode-panel-border);border-top:none;padding:8px;display:flex;flex-direction:column;gap:6px;min-height:40px}
-.lane~.cell{border-top:1px solid var(--vscode-panel-border)}.laned .colhead{border-radius:4px}
+.lane~.cell{border-top:1px solid var(--vscode-panel-border)}.laned .colhead{border-radius:4px}.cell.span{margin-top:6px}
 .cell.drop{outline:2px dashed var(--vscode-focusBorder);outline-offset:-2px}
-.empty{opacity:.5;text-align:center;padding:8px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.empty{color:var(--vscode-descriptionForeground);text-align:center;padding:8px}
 .card{background:var(--vscode-editor-background);border:1px solid var(--vscode-panel-border);border-left:4px solid;border-radius:3px;padding:6px 8px;cursor:grab}
 .card:hover{border-color:var(--vscode-focusBorder)}
 .card:focus{outline:1px solid var(--vscode-focusBorder);outline-offset:1px}
 .card.dragging{opacity:.4}
 .card.active{box-shadow:0 0 0 2px var(--vscode-charts-green)}
-.head{display:flex;gap:6px;align-items:center;font-size:.9em;opacity:.8}
-.head .who{margin-left:auto;background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);border-radius:50%;min-width:20px;height:20px;line-height:20px;text-align:center;font-size:.8em}
+.head{display:flex;gap:6px;align-items:center;font-size:.9em;color:var(--vscode-descriptionForeground)}
+.head .who{margin-left:auto;background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);border-radius:50%;min-width:20px;height:20px;line-height:20px;text-align:center;font-size:.8em;outline:1px solid var(--vscode-contrastBorder,transparent);outline-offset:-1px}
+.who::before{content:attr(data-initials)}
 .title{margin:4px 0;overflow-wrap:anywhere}
 .tags{display:flex;flex-wrap:wrap;gap:4px}
-.tag{background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);border-radius:8px;padding:0 6px;font-size:.8em}
-.message{opacity:.8;padding:20px 0}
+.tag{background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);border-radius:8px;padding:0 6px;font-size:.8em;outline:1px solid var(--vscode-contrastBorder,transparent);outline-offset:-1px}
+.message{color:var(--vscode-descriptionForeground);padding:20px 0}
 @media (prefers-reduced-motion:no-preference){.card{transition:border-color .1s}}
 `;

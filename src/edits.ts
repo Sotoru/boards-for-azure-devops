@@ -3,7 +3,7 @@ import {
   createWorkItem, defaultTeam, getBacklogIteration, getBoard, getTeamField, getWorkItemFull, isMarkdown, listBoards, listIterations, listMembers,
   listStates, listTypes, myIdentity, searchItems, setParent, update, webUrl, WorkItem,
 } from './api';
-import { columnOf } from './boardLogic';
+import { Board, columnOf, laneNames, laneOf, movableLanes } from './boardLogic';
 import { editorUri, WorkItemEditorFs } from './editorFs';
 import { isComplexHtml, normalizeTags } from './markdown';
 import { ScopeStore } from './scope';
@@ -33,6 +33,16 @@ async function boardFor(org: string, project: string, team: string, type: string
     const board = await getBoard(org, project, team, b.id);
     if (board.columns.some(c => c.stateMappings[type])) return board;
   }
+}
+
+// ponytail: board settings cached for the session, since the detail page asks on every render; a board edited in Azure DevOps shows after a window reload.
+const boards = new Map<string, Promise<Board | undefined>>();
+/** The board the item's type sits on, for the scope's team (or the project's default team). */
+export async function boardOfItem(scope: ScopeStore, w: WorkItem) {
+  const team = await teamFor(scope, w.org, project(w));
+  const key = [w.org, project(w), team, w.fields['System.WorkItemType']].join('\n');
+  if (!boards.has(key)) boards.set(key, boardFor(w.org, project(w), team, w.fields['System.WorkItemType']).catch(e => { boards.delete(key); throw e; }));
+  return boards.get(key)!;
 }
 
 async function pickType(org: string, project: string) {
@@ -99,7 +109,7 @@ export function edits(scope: ScopeStore, editorFs: WorkItemEditorFs): Record<str
     // Several columns can share a state: moving to a column sets both.
     async setColumn(w) {
       const type = w.fields['System.WorkItemType'];
-      const board = await boardFor(w.org, project(w), await teamFor(scope, w.org, project(w)), type);
+      const board = await boardOfItem(scope, w);
       if (!board) return void vscode.window.showInformationMessage(t('#{0} is not on any board of the team', w.id));
       const current = columnOf(board, (await getWorkItemFull(w)).fields as unknown as Record<string, unknown>);
       const columns = board.columns.filter(c => c.stateMappings[type])
@@ -107,6 +117,18 @@ export function edits(scope: ScopeStore, editorFs: WorkItemEditorFs): Record<str
       const col = await choose(columns, columns.find(c => c.label === current)?.value, t('Board column ({0})', board.name));
       return col && col.name !== current
         && update(w, { [board.fields.columnField.referenceName]: col.name, 'System.State': col.stateMappings[type] });
+    },
+    async setLane(w) {
+      const board = await boardOfItem(scope, w);
+      if (!board) return void vscode.window.showInformationMessage(t('#{0} is not on any board of the team', w.id));
+      const fields = (await getWorkItemFull(w)).fields as unknown as Record<string, unknown>;
+      const lanes = movableLanes(board, fields);
+      if (!lanes.length) return void vscode.window.showInformationMessage(laneNames(board).length > 1
+        ? t('Swimlanes don\'t apply to the {0} column', columnOf(board, fields)) : t('The {0} board has no swimlanes', board.name));
+      const current = laneOf(board, fields);
+      const lane = await choose(lanes.map(value => ({ label: value || t('Default lane'), value })), current, t('Swimlane ({0})', board.name));
+      // An empty lane field puts the card in the default lane.
+      return lane !== undefined && lane !== current && update(w, { [board.fields.rowField!.referenceName]: lane });
     },
     async setTitle(w) {
       const title = await vscode.window.showInputBox({ value: w.fields['System.Title'], prompt: t('Title'), validateInput: v => (v.trim() ? undefined : t('The title cannot be empty')) });

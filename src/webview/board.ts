@@ -36,6 +36,16 @@ function move(card: CardData, column: string, lane = card.lane) {
   card.lane = lane;
   render(card.id);
   vscode.postMessage({ type: 'move', id: card.id, column, lane });
+  // Focus stays on the card but the change of cell isn't announced; say where it went.
+  const target = data.lanes.length > 1 && data.columns.find(c => c.name === column)?.split ? `${column} · ${lane || data.labels.defaultLane}` : column;
+  announce(data.labels.moved.replace('{0}', target));
+}
+
+const live = document.getElementById('live')!;
+/** Cleared first, so the same message twice in a row is announced again. */
+function announce(text: string) {
+  live.textContent = '';
+  setTimeout(() => { live.textContent = text; }, 50);
 }
 
 function cardEl(card: CardData) {
@@ -45,13 +55,16 @@ function cardEl(card: CardData) {
   c.dataset.id = String(card.id);
   c.style.borderLeftColor = card.color || 'var(--vscode-focusBorder)';
   c.setAttribute('role', 'button');
-  c.setAttribute('aria-label', `#${card.id} ${card.title}, ${card.type}, ${card.assignee ?? data!.labels.unassigned}`);
+  // The visible text in order, without punctuation in between, or axe flags a name mismatch (WCAG 2.5.3); the initials badge becomes the full name.
+  c.setAttribute('aria-label', [`#${card.id}`, card.type, card.title, ...card.tags, card.assignee ?? data!.labels.unassigned].join(' '));
   c.setAttribute('aria-description', data!.labels.moveHint);
   c.title = data!.labels.moveHint;
 
   const head = el('div', 'head');
   head.append(el('span', 'id', `#${card.id}`), el('span', 'type', card.type));
-  const who = el('span', 'who', card.initials || '—');
+  // Initials drawn by CSS: as DOM text they would be visible text missing from the card's name (axe label-content-name-mismatch).
+  const who = el('span', 'who');
+  who.dataset.initials = card.initials || '—';
   who.title = card.assignee ?? data!.labels.unassigned;
   head.append(who);
   c.append(head, el('div', 'title', card.title));
@@ -67,7 +80,7 @@ function cardEl(card: CardData) {
   // Keyboard alternative to drag & drop: Alt+←/→ moves to the previous/next column that accepts the card, Alt+↑/↓ to the adjacent lane.
   c.addEventListener('keydown', e => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); vscode.postMessage({ type: 'open', id: card.id }); }
-    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && data!.columns.find(x => x.name === card.column)?.split) {
       e.preventDefault();
       const lane = data!.lanes[data!.lanes.indexOf(card.lane) + (e.key === 'ArrowUp' ? -1 : 1)];
       if (lane !== undefined) move(card, card.column, lane);
@@ -82,6 +95,13 @@ function cardEl(card: CardData) {
     }
   });
   return c;
+}
+
+/** Decorative disclosure arrow: the state is already in aria-expanded, so screen readers skip it. */
+function arrow(glyph: string) {
+  const a = el('span', undefined, `${glyph} `);
+  a.setAttribute('aria-hidden', 'true');
+  return a;
 }
 
 /** Circular arrow drawn with currentColor, so it follows the theme like a codicon. */
@@ -169,11 +189,63 @@ function render(focusId?: number) {
   }
   const laned = data.lanes.length > 1;
   board.classList.toggle('laned', laned);
+  const spans = (col: (typeof columns)[number]) => laned && !col.split;
+  // Lane titles cover the split columns only (contiguous, between incoming and outgoing).
+  const split = columns.flatMap((c, i) => (spans(c) ? [] : [i + 1]));
+  const laneSpan = split.length ? `${split[0]} / ${split[split.length - 1] + 1}` : '1 / -1';
+
+  const cellEl = (col: (typeof columns)[number], cards: CardData[], key: string, lane?: string) => {
+    const cell = el('section', 'cell');
+    cell.setAttribute('aria-label', lane !== undefined && laned ? `${col.name} · ${lane || data!.labels.defaultLane}` : col.name);
+    // A card just moved here stays visible even if it lands past the limit.
+    const focused = cards.findIndex(c => c.id === focusId);
+    if (focused >= 0) expanded.set(key, Math.max(expanded.get(key) ?? PAGE, focused + 1));
+    const limit = expanded.get(key) ?? PAGE;
+    for (const card of cards.slice(0, limit)) cell.append(cardEl(card));
+    if (!cards.length) cell.append(el('div', 'empty', data!.labels.empty));
+    if (cards.length > limit) {
+      const more = el('button', 'more');
+      more.append(arrow('▾'), `${data!.labels.showMore} (${cards.length - limit})`);
+      more.addEventListener('click', () => { expanded.set(key, limit + PAGE); render(); root.querySelector<HTMLElement>(`.card[data-id="${cards[limit].id}"]`)?.focus(); });
+      cell.append(more);
+    }
+    cell.addEventListener('dragover', e => {
+      const id = Number(document.querySelector<HTMLElement>('.card.dragging')?.dataset.id);
+      const card = data!.cards.find(c => c.id === id);
+      if (card && accepts(col.name, card)) { e.preventDefault(); cell.classList.add('drop'); }
+    });
+    cell.addEventListener('dragleave', () => cell.classList.remove('drop'));
+    cell.addEventListener('drop', e => {
+      e.preventDefault();
+      cell.classList.remove('drop');
+      const card = data!.cards.find(c => c.id === Number(e.dataTransfer!.getData('text/plain')));
+      if (card) move(card, col.name, lane);
+    });
+    return cell;
+  };
+
+  // Spanning columns: the ones left of the lanes go first in the DOM, the rest last, so Tab and screen readers follow the visual order.
+  // Dropped here, a card keeps its lane.
+  const spanning = columns.flatMap((col, i) => {
+    if (!spans(col)) return [];
+    const cell = cellEl(col, visible.filter(c => c.column === col.name), `${col.name}\n*`);
+    cell.style.gridColumn = String(i + 1);
+    cell.classList.add('span');
+    return [{ cell, before: i + 1 < (split[0] ?? 0) }];
+  });
+  for (const s of spanning) if (s.before) board.append(s.cell);
+
+  // Explicit grid rows: row 1 is the column headers, then a title row and a cell row per lane.
+  let row = 2;
   for (const lane of data.lanes) {
     const laneName = lane || data.labels.defaultLane;
     const closed = laned && presets.collapsed.includes(lane);
     if (laned) {
-      const head = el('button', 'lane', `${closed ? '▸' : '▾'} ${laneName} (${visible.filter(c => c.lane === lane && columns.some(x => x.name === c.column)).length})`);
+      const n = visible.filter(c => c.lane === lane && columns.some(x => x.name === c.column && !spans(x))).length;
+      const head = el('button', 'lane');
+      head.append(arrow(closed ? '▸' : '▾'), `${laneName} (${n})`);
+      head.style.gridRow = String(row++);
+      head.style.gridColumn = laneSpan;
       head.setAttribute('aria-expanded', String(!closed));
       head.addEventListener('click', () => {
         set({ collapsed: closed ? presets.collapsed.filter(l => l !== lane) : [...presets.collapsed, lane] });
@@ -181,37 +253,18 @@ function render(focusId?: number) {
       board.append(head);
     }
     if (closed) continue;
-    for (const col of columns) {
-      const cards = visible.filter(c => c.column === col.name && c.lane === lane);
-      const cell = el('section', 'cell');
-      cell.setAttribute('aria-label', laned ? `${col.name} · ${laneName}` : col.name);
-      const key = `${col.name}\n${lane}`;
-      // A card just moved here stays visible even if it lands past the limit.
-      const focused = cards.findIndex(c => c.id === focusId);
-      if (focused >= 0) expanded.set(key, Math.max(expanded.get(key) ?? PAGE, focused + 1));
-      const limit = expanded.get(key) ?? PAGE;
-      for (const card of cards.slice(0, limit)) cell.append(cardEl(card));
-      if (!cards.length) cell.append(el('div', 'empty', data.labels.empty));
-      if (cards.length > limit) {
-        const more = el('button', 'more', `▾ ${data.labels.showMore} (${cards.length - limit})`);
-        more.addEventListener('click', () => { expanded.set(key, limit + PAGE); render(); root.querySelector<HTMLElement>(`.card[data-id="${cards[limit].id}"]`)?.focus(); });
-        cell.append(more);
-      }
-
-      cell.addEventListener('dragover', e => {
-        const id = Number(document.querySelector<HTMLElement>('.card.dragging')?.dataset.id);
-        const card = data!.cards.find(c => c.id === id);
-        if (card && accepts(col.name, card)) { e.preventDefault(); cell.classList.add('drop'); }
-      });
-      cell.addEventListener('dragleave', () => cell.classList.remove('drop'));
-      cell.addEventListener('drop', e => {
-        e.preventDefault();
-        cell.classList.remove('drop');
-        const card = data!.cards.find(c => c.id === Number(e.dataTransfer!.getData('text/plain')));
-        if (card) move(card, col.name, lane);
-      });
+    columns.forEach((col, i) => {
+      if (spans(col)) return;
+      const cell = cellEl(col, visible.filter(c => c.column === col.name && c.lane === lane), `${col.name}\n${lane}`, lane);
+      cell.style.gridRow = String(row);
+      cell.style.gridColumn = String(i + 1);
       board.append(cell);
-    }
+    });
+    row++;
+  }
+  for (const s of spanning) {
+    s.cell.style.gridRow = `2 / ${row}`;
+    if (!s.before) board.append(s.cell);
   }
   root.append(board);
   if (typing !== null) { search.focus(); search.setSelectionRange(typing, typing); }

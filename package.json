@@ -28,6 +28,7 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc",
     "test": "node --test test/*.test.ts",
+    "harness": "node esbuild.mjs && node scripts/board-harness.mjs",
     "package": "vsce package",
     "vscode:prepublish": "npm run typecheck && node esbuild.mjs --production"
   },
@@ -126,6 +127,11 @@
         "category": "Azure Boards"
       },
       {
+        "command": "board_azr_devops.copyScope",
+        "title": "%cmd.copyScope%",
+        "category": "Azure Boards"
+      },
+      {
         "command": "board_azr_devops.open",
         "title": "%cmd.open%"
       },
@@ -140,6 +146,10 @@
       {
         "command": "board_azr_devops.setColumn",
         "title": "%cmd.setColumn%"
+      },
+      {
+        "command": "board_azr_devops.setLane",
+        "title": "%cmd.setLane%"
       },
       {
         "command": "board_azr_devops.setTitle",
@@ -230,6 +240,10 @@
         },
         {
           "command": "board_azr_devops.setColumn",
+          "when": "false"
+        },
+        {
+          "command": "board_azr_devops.setLane",
           "when": "false"
         },
         {
@@ -393,6 +407,11 @@
           "group": "9_scope"
         },
         {
+          "command": "board_azr_devops.copyScope",
+          "when": "view == board_azr_devops.items && !board_azr_devops.noOrg",
+          "group": "9_scope"
+        },
+        {
           "command": "board_azr_devops.refresh",
           "when": "view == board_azr_devops.queries",
           "group": "navigation@1"
@@ -405,6 +424,10 @@
         },
         {
           "command": "board_azr_devops.setColumn",
+          "group": "1@0"
+        },
+        {
+          "command": "board_azr_devops.setLane",
           "group": "1@0"
         },
         {

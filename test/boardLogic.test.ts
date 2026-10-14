@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { type Board, boardQuery, boardTypes, columnOf, fullIterationPath, initials, laneNames, laneOf, targetState } from '../src/boardLogic.ts';
+import { type Board, boardQuery, boardTypes, columnOf, fullIterationPath, initials, laneNames, laneOf, movableLanes, targetState } from '../src/boardLogic.ts';
 
 const board: Board = {
   id: 'b1',
@@ -68,4 +68,13 @@ test('boardQuery: backlog iteration and hidden bug types', () => {
   const q = boardQuery({ field: 'System.AreaPath', values: [] }, board, false, { backlogIteration: "Fabrikam\\O'Neil", hiddenTypes: ['Bug'] });
   assert.match(q, /\[System\.WorkItemType\] IN \('User Story'\)/);
   assert.match(q, /\[System\.IterationPath\] UNDER 'Fabrikam\\O''Neil'/);
+});
+
+test('movableLanes: only on boards with lanes, only in in-progress columns', () => {
+  const laned: Board = { ...board, rows: [{ id: '0', name: null }, { id: '1', name: 'Expedite' }], fields: { ...board.fields, rowField: { referenceName: 'WEF_X_Kanban.Lane' } } };
+  const at = (column: string) => ({ 'WEF_X_Kanban.Column': column, 'System.WorkItemType': 'Bug', 'System.State': 'Active' });
+  assert.deepEqual(movableLanes(laned, at('Active')), ['', 'Expedite']);
+  assert.deepEqual(movableLanes(laned, at('New')), []);
+  assert.deepEqual(movableLanes(laned, at('Closed')), []);
+  assert.deepEqual(movableLanes(board, at('Active')), []);
 });

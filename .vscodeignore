@@ -10,3 +10,5 @@ PLAN.md
 .gitignore
 .github/
 images/*.svg
+scripts/**
+.harness/**

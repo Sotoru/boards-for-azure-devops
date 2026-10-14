@@ -4,11 +4,12 @@ import { parseArtifactLinks } from './gitText';
 import { historyEntries, statePath, WorkItemUpdate } from './historyText';
 import { renderMarkdown } from './editorFs';
 import { esc } from './text';
+import { Board, laneOf, movableLanes } from './boardLogic';
 
 const t = vscode.l10n.t;
 // Actions that don't edit a field; fields are edited by clicking them.
 const ACTIONS: [string, string][] = [['startWork', 'Start working'], ['copyForAi', 'Copy for AI'], ['addChild', 'Add child']];
-const EDIT_COMMANDS = ['setState', 'setColumn', 'setTitle', 'setPriority', 'setTags', 'assign', 'setIteration', 'setParent', 'editDescription', ...ACTIONS.map(([c]) => c)]
+const EDIT_COMMANDS = ['setState', 'setColumn', 'setLane', 'setTitle', 'setPriority', 'setTags', 'assign', 'setIteration', 'setParent', 'editDescription', ...ACTIONS.map(([c]) => c)]
   .map(c => `board_azr_devops.${c}`);
 
 // Command URI args go in the link; drop the long text fields so the URL stays small.
@@ -156,6 +157,10 @@ async function linkedDev(org: string, relations: { rel: string; url: string }[] 
   ].join('');
 }
 
+// Set by the extension: finding the item's board needs the scope's team.
+let boardOf: (w: WorkItem) => Promise<Board | undefined> = async () => undefined;
+export const setBoardLookup = (f: typeof boardOf) => { boardOf = f; };
+
 let panel: vscode.WebviewPanel | undefined;
 let shown: WorkItem | undefined;
 export const shownId = () => shown?.id;
@@ -202,9 +207,9 @@ async function render(p: vscode.WebviewPanel, w: WorkItem, latest?: FullWorkItem
   const fullP = getWorkItemFull(w).then(x => (latest?.id === x.id && latest.rev > x.rev ? { ...x, rev: latest.rev, fields: latest.fields } : x));
   const none = () => ({} as Record<string, string>);
   const parentP = fullP.then(x => x.fields['System.Parent'] ? getWorkItemFull({ org: w.org, id: x.fields['System.Parent'] }).catch(() => undefined) : undefined);
-  const [full, comments, updates, dev, types, states, parent] = await Promise.all([
+  const [full, comments, updates, dev, types, states, parent, board] = await Promise.all([
     fullP, getComments(w), getUpdates(w), fullP.then(x => linkedDev(w.org, x.relations)),
-    typeColors(w.org, w.fields['System.TeamProject']).catch(none), stateColors(w).catch(none), parentP,
+    typeColors(w.org, w.fields['System.TeamProject']).catch(none), stateColors(w).catch(none), parentP, boardOf(w).catch(() => undefined),
   ]);
   const f = full.fields;
   // Markdown fields come back as raw Markdown; render them like the HTML ones.
@@ -220,6 +225,9 @@ async function render(p: vscode.WebviewPanel, w: WorkItem, latest?: FullWorkItem
   const type = f['System.WorkItemType'], state = f['System.State'];
   // One column field per team board the item is on.
   const column = [...new Set(Object.entries(f).filter(([k, v]) => k.endsWith('_Kanban.Column') && v).map(([, v]) => String(v)))].join(' · ');
+  // Only where Azure DevOps draws lanes: boards with swimlanes, in-progress columns.
+  const lane = board && movableLanes(board, f as unknown as Record<string, unknown>).length
+    ? `<span class="sep"></span><span class="lbl">${esc(t('Lane'))}</span>${editable('setLane', fresh, esc(laneOf(board, f as unknown as Record<string, unknown>) || t('Default lane')), t('Move to lane'))}` : '';
   const color = (c?: string) => (c && /^#[0-9a-f]{6}$/i.test(c) ? c : '');
   const placeholder = (s: string) => `<span class="none">${esc(s)}</span>`;
   const tags = f['System.Tags']?.split(';').map(s => s.trim()).filter(Boolean) ?? [];
@@ -239,7 +247,7 @@ async function render(p: vscode.WebviewPanel, w: WorkItem, latest?: FullWorkItem
 
   p.webview.html = page(`
 <header style="--type:${color(types[type]) || 'var(--vscode-panel-border)'}">
-<div class="kind"><b>${esc(type)}</b><span>#${w.id}</span><span class="sep"></span><span class="lbl">${esc(t('State'))}</span>${editable('setState', fresh, `<span class="dot" style="--dot:${color(states[state]) || 'var(--vscode-descriptionForeground)'}"></span>${esc(state)}`, t('Change state'))}${column ? `<span class="sep"></span><span class="lbl">${esc(t('Column'))}</span>${editable('setColumn', fresh, esc(column), t('Move to column'))}` : ''}</div>
+<div class="kind"><b>${esc(type)}</b><span>#${w.id}</span><span class="sep"></span><span class="lbl">${esc(t('State'))}</span>${editable('setState', fresh, `<span class="dot" style="--dot:${color(states[state]) || 'var(--vscode-descriptionForeground)'}"></span>${esc(state)}`, t('Change state'))}${column ? `<span class="sep"></span><span class="lbl">${esc(t('Column'))}</span>${editable('setColumn', fresh, esc(column), t('Move to column'))}` : ''}${lane}</div>
 <h1>${editable('setTitle', fresh, esc(f['System.Title']), t('Edit title'))}</h1>
 <p class="bar">${ACTIONS.map(([c, label]) => cmdLink(c, fresh, t(label))).join('')}<a href="${esc(webUrl(w))}">${esc(t('Open in Azure DevOps'))}</a></p>
 </header>

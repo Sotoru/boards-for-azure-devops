@@ -125,5 +125,11 @@
   "{0} links added": "{0} link aggiunti",
   "{0} links removed": "{0} link rimossi",
   "{0} new work items assigned to you": "{0} nuovi work item assegnati a te",
-  "{0} open work items assigned to you": "{0} work item aperti assegnati a te"
+  "{0} open work items assigned to you": "{0} work item aperti assegnati a te",
+  "Moved to {0}": "Spostato in {0}",
+  "Lane": "Corsia",
+  "Move to lane": "Sposta in un'altra corsia",
+  "Swimlanes don't apply to the {0} column": "Le corsie non si applicano alla colonna {0}",
+  "The {0} board has no swimlanes": "La bacheca {0} non ha corsie",
+  "Swimlane ({0})": "Corsia ({0})"
 }

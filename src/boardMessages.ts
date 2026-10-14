@@ -16,7 +16,8 @@ export interface CardData {
   active: boolean;
 }
 /** `done`: an outgoing column (completed items). */
-export interface ColumnData { name: string; limit: number; accepts: string[]; done: boolean }
+/** `split`: divided by swimlanes; like Azure DevOps, incoming and outgoing columns span all lanes. */
+export interface ColumnData { name: string; limit: number; accepts: string[]; done: boolean; split: boolean }
 
 /** Kanban view settings, saved by the extension. `collapsed` holds lane names ('' = default lane). */
 export interface BoardView { who: 'all' | 'mine' | 'unassigned'; hideDone: boolean; collapsed: string[]; query: string }
@@ -32,7 +33,7 @@ export interface BoardData {
   currentSprint: boolean;
   view: Partial<BoardView>;
   cards: CardData[];
-  labels: Record<'filter' | 'refresh' | 'empty' | 'moveHint' | 'unassigned' | 'board' | 'defaultLane' | 'mine' | 'sprint' | 'hideDone' | 'presets' | 'showMore' | 'search', string>;
+  labels: Record<'filter' | 'refresh' | 'empty' | 'moveHint' | 'unassigned' | 'board' | 'defaultLane' | 'mine' | 'sprint' | 'hideDone' | 'presets' | 'showMore' | 'search' | 'moved', string>;
 }
 
 export type ToWebview =

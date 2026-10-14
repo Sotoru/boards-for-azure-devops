@@ -72,6 +72,13 @@ export function laneOf(b: Board, fields: Record<string, unknown>): string {
   return typeof lane === 'string' && laneNames(b).includes(lane) ? lane : '';
 }
 
+/** Lanes the card can move between: none without swimlanes, or in incoming and outgoing columns, which span all lanes. */
+export function movableLanes(b: Board, fields: Record<string, unknown>): string[] {
+  const lanes = laneNames(b);
+  const column = b.columns.find(c => c.name === columnOf(b, fields));
+  return b.fields.rowField && lanes.length > 1 && column?.columnType === 'inProgress' ? lanes : [];
+}
+
 /** State a card must take when dropped in a column; undefined if the column doesn't accept its type. */
 export const targetState = (b: Board, column: string, type: string) =>
   b.columns.find(c => c.name === column)?.stateMappings[type];

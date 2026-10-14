@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
 import { allowLogin, FullWorkItem, webUrl, WorkItem } from './api';
 import { SCHEME, WorkItemEditorFs } from './editorFs';
-import { createInScope, edits } from './edits';
+import { boardOfItem, createInScope, edits } from './edits';
 import { copyForAi, registerMcp } from './ai';
 import { BoardPanel } from './board';
 import { GitIntegration } from './git';
 import { clearFilters, pickFilters, pickGroupBy } from './filterPick';
 import { activeFilterCount } from './filters';
 import { Model } from './model';
-import { preview, shownId } from './preview';
+import { preview, setBoardLookup, shownId } from './preview';
 import { QueryTree } from './queries';
 import { ScopeStore } from './scope';
 import { Row, WorkItemTree } from './tree';
@@ -89,6 +89,15 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.window.onDidChangeWindowState(s => { if (s.focused && stale(60_000)) void model.refresh(); }),
     command('refresh', () => model.refresh()),
     command('switchScope', () => scope.pick()),
+    // Plain text to paste into a chat with an Azure DevOps MCP server, which asks for these names.
+    command('copyScope', async () => {
+      const { org, project, team } = scope.current;
+      if (!org) return scope.pick();
+      const text = [`Azure DevOps organization: ${org} (https://dev.azure.com/${encodeURIComponent(org)})`,
+        project && `Project: ${project}`, team && `Team: ${team}`].filter(Boolean).join('\n');
+      await vscode.env.clipboard.writeText(text);
+      vscode.window.setStatusBarMessage(t('Copied: {0}', [org, project, team].filter(Boolean).join(' · ')), 3000);
+    }),
     command('showAll', () => model.setMode('all')),
     command('showMine', () => model.setMode('mine')),
     command('filter', () => pickFilters(model)),
@@ -121,6 +130,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.workspace.registerFileSystemProvider(SCHEME, editorFs, { isCaseSensitive: true }),
     editorFs.onDidSave(w => afterChange(w)),
   );
+  setBoardLookup(w => boardOfItem(scope, w));
   present();
   void model.refresh(); // silent if not signed in yet: feeds the badge and notifications without opening the view
 }
